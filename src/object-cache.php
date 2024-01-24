@@ -4,7 +4,7 @@
  *
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.0.0
+ * Version:				1.0.1
  * Requires at least:	5.5.0
  * Tested up to:		6.4
  * Requires PHP:		7.4
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EACDOOJIGGER_OBJECT_CACHE','1.0.0');
+define('EAC_OBJECT_CACHE','1.0.1');
 
 /**
  *
@@ -84,11 +84,11 @@ define('EACDOOJIGGER_OBJECT_CACHE','1.0.0');
 class WP_Object_Cache
 {
 	/**
-	 * this class id
+	 * this plugin id
 	 *
 	 * @var string
 	 */
-	const CLASS_NAME		= 'eacDoojigger_object_cache';
+	const PLUGIN_NAME		= '{eac}ObjectCache';
 
 	/**
 	 * internal group id
@@ -359,11 +359,11 @@ class WP_Object_Cache
 				{
 					// this gets moved to the top of an admin page
 					if ($this->display_stats && is_admin_bar_showing()) {
-						ob_start();
+						echo "\n<style>".esc_html($this->statsCSS)."</style>\n";
+						echo "<div class='object-cache-notice notice notice-info'>";
+						echo "<details><summary>Object Cache...</summary>";
 						$this->htmlStats( ($this->display_stats=='sample') );
-						$stats = "<details><summary>Object Cache...</summary>".ob_get_clean()."</details>";
-						echo "\n<style>".$this->statsCSS."</style>\n";
-						echo "<div class='object-cache-notice notice notice-info'>".$stats."</div>\n";
+						echo "</details></div>\n";
 					}
 				},1000
 			);
@@ -1393,7 +1393,7 @@ class WP_Object_Cache
 	 */
 	public function reset()
 	{
-		_deprecated_function( __FUNCTION__, '3.5.0', self::CLASS_NAME.'::switch_to_blog()' );
+		_deprecated_function( __FUNCTION__, '3.5.0', 'WP_Object_Cache::switch_to_blog()' );
 		$this->switch_to_blog( get_current_blog_id() );
 	}
 
@@ -1692,14 +1692,15 @@ class WP_Object_Cache
 			}
 
 			if ($this->display_errors && is_admin() && function_exists('is_admin_bar_showing') && is_admin_bar_showing()) {
-				echo "<div class='object-cache-{$class} notice notice-{$class}'><p>WP Object Cache: ".$message."</p></div>";
+				echo "<div class='object-cache-".esc_attr($class)." notice notice-".esc_attr($class)."'>".
+					 "<p>WP Object Cache: ".esc_attr($message)."</p></div>";
 			}
 
 			$message = "WP_object_cache->".$source.' : '.$message.$trace;
 			error_log($message);
 
 			if ($this->log_errors && function_exists('eacDoojigger')) {
-				eacDoojigger()->logError($message,self::CLASS_NAME);
+				eacDoojigger()->logError($message,self::PLUGIN_NAME);
 			}
 		} catch (Throwable $e) {}
 	}
@@ -1721,17 +1722,17 @@ class WP_Object_Cache
 	{
 		$stats = $this->getStats(false);
 
-		$ratio = $this->cache_hit_ratio($this->cache_stats['cache hits'],$this->cache_stats['cache misses']);
 		echo "</p>";
 		echo "<strong>Cache Hits:</strong> ".number_format($this->cache_stats['cache hits'],0)."<br />";
 		echo "<strong>Cache Misses:</strong> ".number_format($this->cache_stats['cache misses'])."<br />";
-		echo "<strong>Cache Ratio:</strong> {$ratio}";
+		echo "<strong>Cache Ratio:</strong> ".
+			$this->cache_hit_ratio($this->cache_stats['cache hits'],$this->cache_stats['cache misses']);
 		echo "</p>\n";
 
 		echo "<p><strong>Cache Counts:</strong></p><ul>";
 		foreach ($stats['cache'] as $group => $cache) {
 			if ($cache && $cache[0]) {
-				echo '<li>' . esc_html( $group ) .
+				echo '<li>' . esc_attr( $group ) .
 					 ' - ' . number_format( $cache[0], 0 );
 			}
 		}
@@ -1740,14 +1741,14 @@ class WP_Object_Cache
 		echo "<p><strong>Cache Groups:</strong></p><ul>";
 		foreach ($stats['cache-groups'] as $group => $cache) {
 			if ($cache && $cache[0]) {
-				echo '<li>' . esc_html( $group ) .
+				echo '<li>' . esc_attr( $group ) .
 					 ' - ' . number_format( $cache[0], 0 ).
 					 ' ( ' . number_format( $cache[1] / KB_IN_BYTES, 2 ) . 'k )</li>';
 			}
 		}
 		echo "</ul>\n";
 
-		echo "<p>".self::CLASS_NAME." v".EACDOOJIGGER_OBJECT_CACHE."</p>\n";
+		echo "<p>* ".esc_attr(self::PLUGIN_NAME)." v".esc_attr(EAC_OBJECT_CACHE)."</p>\n";
 	}
 
 
@@ -1769,7 +1770,7 @@ class WP_Object_Cache
 		if (isset($stats['id'])) {
 			echo "<p>";
 			foreach ($stats['id'] as $name => $value) {
-				echo "{$name}: {$value}"."<br />";
+				echo esc_attr($name).": ".esc_attr($value)."<br />";
 			}
 			echo "</p>";
 		}
@@ -1780,9 +1781,9 @@ class WP_Object_Cache
 			echo "\n<tr><th colspan='4'><p>Cache Counts:</p></th></tr>";
 			foreach ($stats['cache'] as $name => $value) {
 				if ($value && $value[0]) {
-					echo '<tr><th>'.esc_html( $name ).'</th>'.
+					echo '<tr><th>'.esc_attr( $name ).'</th>'.
 							 '<td>'.number_format($value[0], 0).'</td>'.
-							 '<td>'.$value[1].'</td>'.
+							 '<td>'.esc_attr($value[1]).'</td>'.
 							 '<td></td></tr>';
 				}
 			}
@@ -1792,7 +1793,7 @@ class WP_Object_Cache
 			echo "\n<tr><th colspan='4'><p>L1 (In-Memory) Cache Groups:</p></th></tr>";
 			foreach ($stats['cache-groups'] as $name => $value) {
 				if ($value && $value[0]) {
-					echo '<tr><th>'.esc_html( $name ).'</th>'.
+					echo '<tr><th>'.esc_attr( $name ).'</th>'.
 						 '<td>'	 .number_format( $value[0], 0) . '</td>'.
 						 '<td> ~'.number_format( $value[1] / KB_IN_BYTES, 2 ) . 'k</td>'.
 						 '<td> +'.number_format( $value[2], 0 ) . '</td></tr>';
@@ -1804,7 +1805,7 @@ class WP_Object_Cache
 			echo "\n<tr><th colspan='4'><p>L2 (Persistent) Cache Groups:</p></th></tr>";
 			foreach ($stats['database-groups'] as $name => $value) {
 				if ($value && $value[0]) {
-					echo '<tr><th>'.esc_html( $name ).'</th>'.
+					echo '<tr><th>'.esc_attr( $name ).'</th>'.
 						 '<td>'	 .number_format( $value[0], 0) . '</td>'.
 						 '<td> ~'.number_format( $value[1] / KB_IN_BYTES, 2 ) . 'k</td>'.
 						 '<td></td></tr>';
@@ -1832,17 +1833,17 @@ class WP_Object_Cache
 
 		$stats = array();
 		$stats['id'] = array(
-			self::CLASS_NAME	=> EACDOOJIGGER_OBJECT_CACHE,
+			self::PLUGIN_NAME	=> EAC_OBJECT_CACHE,
 			'cache file'		=> ($this->db)
 					? '~/'.trailingslashit(basename($this->cache_folder)) . $this->cache_file
 					: 'memory-only',
 			'sample time'		=> wp_date('c'),
 		);
 		if (isset($_SERVER['HTTP_HOST'],$_SERVER['REQUEST_URI'])) {
-			$stats['id']['url']	= sprintf('%s://%s%s',
+			$stats['id']['url']	= sanitize_url( sprintf('%s://%s%s',
 				(is_ssl()) ? 'https' : 'http',
 				$_SERVER['HTTP_HOST'],
-				$_SERVER['REQUEST_URI']);
+				$_SERVER['REQUEST_URI']) );
 		}
 
 		// addStats counters
@@ -1921,11 +1922,10 @@ class WP_Object_Cache
 	/**
 	 * Returns the stats from the last sample saved.
 	 *
-	 * @param string $febe - front-end ('fe') or back-end ('be')
 	 */
-	public function getLastSample( $febe = 'fe' ): array
+	public function getLastSample(): array
 	{
-		if ( $row = $this->get( "sample-{$febe}", self::GROUP_ID ) ) {
+		if ( $row = $this->get( "sample", self::GROUP_ID ) ) {
 			return $row;
 		}
 		return $this->getStats(true);

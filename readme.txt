@@ -1,8 +1,8 @@
 === {eac}ObjectCache - SQLite powered WP_Object_Cache Drop-in. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.0.0
-Last Updated:       27-Dec-2023
+Stable tag:         1.0.1
+Last Updated:       24-Jan-2024
 Requires at least:  5.5.0
 Tested up to:       6.4
 Requires PHP:       7.4
@@ -392,7 +392,7 @@ Once installed and activated options for this extension will show in the 'Tools'
 
 == Copyright ==
 
-= Copyright © 2023, EarthAsylum Consulting, distributed under the terms of the GNU GPL. =
+= Copyright © 2024, EarthAsylum Consulting, distributed under the terms of the GNU GPL. =
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
@@ -402,6 +402,11 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 1.0.1 - January 24, 2024 =
+
++	Improved sanitization and output escaping.
++	Changed constant EACDOOJIGGER_OBJECT_CACHE to EAC_OBJECT_CACHE.
 
 = Version 1.0.0 - December 9, 2023 =
 

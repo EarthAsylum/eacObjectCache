@@ -7,14 +7,14 @@ namespace EarthAsylumConsulting;
  * @category	WordPress Plugin
  * @package		{eac}ObjectCache\{eac}Doojigger Extensions
  * @author		Kevin Burkholder <KBurkholder@EarthAsylum.com>
- * @copyright	Copyright (c) 2023 EarthAsylum Consulting <www.earthasylum.com>
+ * @copyright	Copyright (c) 2024 EarthAsylum Consulting <www.earthasylum.com>
  * @version		1.x
  * @link		https://eacDoojigger.earthasylum.com/
  *
  * @wordpress-plugin
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.0.0
+ * Version:				1.0.1
  * Requires at least:	5.5.0
  * Tested up to:		6.4
  * Requires PHP:		7.4
@@ -45,7 +45,7 @@ class eacObjectCache
 				/*
     			 * Enable update notice (self hosted or wp hosted)
     			 */
-			//	eacDoojigger::loadPluginUpdater(__FILE__,'wp');
+				eacDoojigger::loadPluginUpdater(__FILE__,'wp');
 
 				/*
     			 * Add links on plugins page
