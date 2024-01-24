@@ -2,7 +2,7 @@
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
 Stable tag:         1.0.1  
-Last Updated:       23-Jan-2024  
+Last Updated:       24-Jan-2024  
 Requires at least:  5.5.0  
 Tested up to:       6.4  
 Requires PHP:       7.4  
@@ -12,6 +12,7 @@ License:            GPLv3 or later
 License URI:        https://www.gnu.org/licenses/gpl.html  
 Tags:               cache, object cache, wp cache, sqlite, performance, {eac}Doojigger,  
 WordPress URI:		https://wordpress.org/plugins/eacobjectcache  
+**Required Plugins:	[{eac}Doojigger](https://eacDoojigger.earthasylum.com/)**
 
 **_{eac}ObjectCache is a drop-in persistent object cache using a SQLite database to cache WordPress objects._**
 
@@ -403,7 +404,7 @@ You should receive a copy of the GNU General Public License along with this prog
 
 ### Changelog
 
-#### Version 1.0.1 - January 23, 2024
+#### Version 1.0.1 - January 24, 2024
 
 +	Improved sanitization and output escaping.
 +	Changed constant EACDOOJIGGER_OBJECT_CACHE to EAC_OBJECT_CACHE.
