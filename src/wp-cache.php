@@ -8,7 +8,7 @@
  * @subpackage Cache
  */
 
-defined( 'EACDOOJIGGER_OBJECT_CACHE' ) || exit;
+defined( 'EAC_OBJECT_CACHE' ) || exit;
 
 /**
  * Sets up Object Cache Global and assigns it.

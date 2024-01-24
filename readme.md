@@ -406,6 +406,7 @@ You should receive a copy of the GNU General Public License along with this prog
 #### Version 1.0.1 - January 23, 2024
 
 +	Improved sanitization and output escaping.
++	Changed constant EACDOOJIGGER_OBJECT_CACHE to EAC_OBJECT_CACHE.
 
 #### Version 1.0.0 - December 9, 2023
 
