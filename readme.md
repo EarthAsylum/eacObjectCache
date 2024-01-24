@@ -1,17 +1,17 @@
 ## {eac}ObjectCache - SQLite powered WP_Object_Cache Drop-in.
-- Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
-- Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-- Stable tag:         1.0.1
-- Last Updated:       23-Jan-2023
-- Requires at least:  5.5.0
-- Tested up to:       6.4
-- Requires PHP:       7.4
-- Requires EAC:       2.4
-- Contributors:       kevinburkholder
-- License:            GPLv3 or later
-- License URI:        https://www.gnu.org/licenses/gpl.html
-- Tags:               cache, object cache, wp cache, sqlite, performance, {eac}Doojigger,
-- WordPress URI:		https://wordpress.org/plugins/eacobjectcache
+Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
+Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
+Stable tag:         1.0.1  
+Last Updated:       23-Jan-2024  
+Requires at least:  5.5.0  
+Tested up to:       6.4  
+Requires PHP:       7.4  
+Requires EAC:       2.4  
+Contributors:       kevinburkholder  
+License:            GPLv3 or later  
+License URI:        https://www.gnu.org/licenses/gpl.html  
+Tags:               cache, object cache, wp cache, sqlite, performance, {eac}Doojigger,  
+WordPress URI:		https://wordpress.org/plugins/eacobjectcache  
 
 {eac}ObjectCache is a drop-in persistent object cache using a SQLite database to cache WordPress objects.
 
@@ -392,9 +392,9 @@ Once installed and activated options for this extension will show in the 'Tools'
 
 ### Copyright
 
-#### Copyright © 2023, EarthAsylum Consulting, distributed under the terms of the GNU GPL.
+#### Copyright © 2024, EarthAsylum Consulting, distributed under the terms of the GNU GPL.
 
-- This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.  
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
@@ -403,7 +403,7 @@ You should receive a copy of the GNU General Public License along with this prog
 
 ### Changelog
 
-#### Version 1.0.1 - January 23, 2023
+#### Version 1.0.1 - January 24, 2023
 
 +	Improved sanitization and output escaping.
 
