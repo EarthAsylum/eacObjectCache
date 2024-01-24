@@ -7,13 +7,13 @@ Requires at least:  5.5.0
 Tested up to:       6.4  
 Requires PHP:       7.4  
 Requires EAC:       2.4  
-Contributors:       kevinburkholder  
+Contributors:       [kevinburkholder](https://profiles.wordpress.org/kevinburkholder)  
 License:            GPLv3 or later  
 License URI:        https://www.gnu.org/licenses/gpl.html  
 Tags:               cache, object cache, wp cache, sqlite, performance, {eac}Doojigger,  
 WordPress URI:		https://wordpress.org/plugins/eacobjectcache  
 
-{eac}ObjectCache is a drop-in persistent object cache using a SQLite database to cache WordPress objects.
+**_{eac}ObjectCache is a drop-in persistent object cache using a SQLite database to cache WordPress objects._**
 
 ### Description
 
@@ -403,7 +403,7 @@ You should receive a copy of the GNU General Public License along with this prog
 
 ### Changelog
 
-#### Version 1.0.1 - January 24, 2023
+#### Version 1.0.1 - January 23, 2024
 
 +	Improved sanitization and output escaping.
 
