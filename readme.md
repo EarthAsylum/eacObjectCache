@@ -1,5 +1,7 @@
-## {eac}ObjectCache - SQLite powered WP_Object_Cache Drop-in.  
-[![eacDoojigger](https://img.shields.io/badge/Requires-{eac}Doojigger-da821d)](https://eacDoojigger.earthasylum.com/)  
+# {eac}ObjectCache - SQLite powered WP_Object_Cache Drop-in.  
+[![EarthAsylum Consulting](https://img.shields.io/badge/EarthAsylum-Consulting-0?&labelColor=6e9882&color=707070)](https://earthasylum.com/) [![eacDoojigger](https://img.shields.io/badge/Requires-{eac}Doojigger-da821d)](https://eacDoojigger.earthasylum.com/)  
+<details><summary>Plugin Header</summary><samp><small>
+
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
 Stable tag:         1.0.1  
@@ -13,10 +15,11 @@ License:            GPLv3 or later
 License URI:        https://www.gnu.org/licenses/gpl.html  
 Tags:               cache, object cache, wp cache, sqlite, performance, {eac}Doojigger,  
 WordPress URI:		https://wordpress.org/plugins/eacobjectcache  
+</small></samp></details>
 
 **_{eac}ObjectCache is a drop-in persistent object cache using a SQLite database to cache WordPress objects._**
 
-### Description
+## Description
 
 The _{eac}Doojigger Object Cache_ ({eac}ObjectCache) is a light-weight and very efficient drop-in persistent object cache that uses a fast SQLite database to cache WordPress objects.
 
@@ -57,7 +60,7 @@ SQLite is a fast, small, single-file relational database engine. By using SQLite
 +	Uses the PHP Data Objects (PDO) extension included with PHP.
 
 
-### Settings
+## Settings
 
 Several cache settings can be modified by adding defined constants to the `wp-config.php` file. The default settings are recommended and optimal in most cases but individual settings may need to be adjusted based on traffic volume, specific requirements, or unique circumstances.
 
@@ -256,7 +259,7 @@ Pre-fetching a group of records may be much faster than loading each key individ
 ```
 
 
-### WP-Cache
+## WP-Cache
 
 #### Implemented Standard and Non-Standard WP-Cache API Functions:
 
@@ -342,7 +345,7 @@ wp_cache_add_prefetch_groups( $groups )
 ```
 
 
-### Installation
+## Installation
 
 **{eac}ObjectCache** is an extension plugin to and requires installation and registration of [{eac}Doojigger](https://eacDoojigger.earthasylum.com/).
 
@@ -371,7 +374,7 @@ See [Managing Plugins -> Manual Plugin Installation](https://wordpress.org/suppo
 Once installed and activated options for this extension will show in the 'Tools' or 'Object Cache' tab of {eac}Doojigger settings.
 
 
-### Screenshots
+## Screenshots
 
 1. Object Cache (Tools)
 ![{eac}ObjectCache](https://d2xk802d4616wu.cloudfront.net/eacobjectcache/assets/screenshot-1.png)
@@ -384,14 +387,14 @@ Once installed and activated options for this extension will show in the 'Tools'
 
 
 
-### Other Notes
+## Other Notes
 
 #### Additional Information
 
 +   {eac}ObjectCache is an extension plugin to and requires installation and registration of [{eac}Doojigger](https://eacDoojigger.earthasylum.com/).
 
 
-### Copyright
+## Copyright
 
 #### Copyright © 2024, EarthAsylum Consulting, distributed under the terms of the GNU GPL.
 
@@ -402,7 +405,7 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY 
 You should receive a copy of the GNU General Public License along with this program. If not, see [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/).
 
 
-### Changelog
+## Changelog
 
 #### Version 1.0.1 - January 24, 2024
 
