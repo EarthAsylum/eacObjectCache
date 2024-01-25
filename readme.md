@@ -1,5 +1,7 @@
 # {eac}ObjectCache - SQLite powered WP_Object_Cache Drop-in.  
-[![EarthAsylum Consulting](https://img.shields.io/badge/EarthAsylum-Consulting-0?&labelColor=6e9882&color=707070)](https://earthasylum.com/) [![eacDoojigger](https://img.shields.io/badge/Requires-{eac}Doojigger-da821d)](https://eacDoojigger.earthasylum.com/)  
+[![EarthAsylum Consulting](https://img.shields.io/badge/EarthAsylum-Consulting-0?&labelColor=6e9882&color=707070)](https://earthasylum.com/)
+[![WordPress](https://img.shields.io/badge/WordPress-Plugins-grey?logo=wordpress&labelColor=blue)](https://wordpress.org/plugins/search/EarthAsylum/)
+[![eacDoojigger](https://img.shields.io/badge/Requires-{eac}Doojigger-da821d)](https://eacDoojigger.earthasylum.com/)  
 <details><summary>Plugin Header</summary><samp><small>
 
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
@@ -394,69 +396,3 @@ Once installed and activated options for this extension will show in the 'Tools'
 +   {eac}ObjectCache is an extension plugin to and requires installation and registration of [{eac}Doojigger](https://eacDoojigger.earthasylum.com/).
 
 
-## Copyright
-
-#### Copyright © 2024, EarthAsylum Consulting, distributed under the terms of the GNU GPL.
-
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.  
-
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-You should receive a copy of the GNU General Public License along with this program. If not, see [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/).
-
-
-## Changelog
-
-#### Version 1.0.1 - January 24, 2024
-
-+	Improved sanitization and output escaping.
-+	Changed constant EACDOOJIGGER_OBJECT_CACHE to EAC_OBJECT_CACHE.
-
-#### Version 1.0.0 - December 9, 2023
-
-+	First public release.
-
-#### Version 0.5
-
-+	Testing in live, multisite environment.
-+	Ignore 'force_cache' flag (force L2 read).
-	+	if we've updated a key, but not written yet, then force a persistent load, we lose that value.
-+	Added wp_flush_blog() function.
-+	Cache L2 misses saving sqlite selects on records known to not exist.
-+	Don't attempt read or delete on non-persistent groups.
-+	Added cache hit ratio to stats.
-+	Remove function call counts (for testing).
-
-#### Version 0.4
-
-+	Enhanced admin screen with advanced options.
-+	Group constants used:
-	+	EAC_OBJECT_CACHE_GLOBAL_GROUPS
-	+	EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS
-	+	EAC_OBJECT_CACHE_PERMANENT_GROUPS
-	+	EAC_OBJECT_CACHE_PREFETCH_GROUPS
-+	Added non-standard wp_cache_add_permanent_groups(), wp_cache_add_prefetch_groups()
-
-#### Version 0.3
-
-+	Parameterize timeout, retries.
-+	Import transients from MySQL.
-+	Rework select/replace/delete SQL.
-	+	 New select_one(), select_all() methods.
-+	key_exists(), key_exists_memory(), key_exists_database() replace _exists().
-+	Add permanent groups (allow no expiration, overriding default expire).
-+	Add function call counts (for testing).
-
-#### Version 0.2
-
-+	Support add/get/set/delete _multiple methods (non-standard replace_multiple).
-+	Add pre-fetch groups.
-+	Add delayed writes.
-+	Add settings via defined constants.
-+	Add more detailed counts/stats.
-+	Manage install/uninstall, activate/deactivate actions.
-
-#### Version 0.1
-
-+	Simple memory caching with get/set persistent cache supporting wp-cache functions.
-+	Testing SQLite methods.
