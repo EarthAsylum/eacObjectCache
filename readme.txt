@@ -12,6 +12,7 @@ License:            GPLv3 or later
 License URI:        https://www.gnu.org/licenses/gpl.html
 Tags:               cache, object cache, wp cache, sqlite, performance, {eac}Doojigger,
 WordPress URI:		https://wordpress.org/plugins/eacobjectcache
+GitHub URI:			https://github.com/EarthAsylum/eacObjectCache
 
 {eac}ObjectCache is a drop-in persistent object cache using a SQLite database to cache WordPress objects.
 

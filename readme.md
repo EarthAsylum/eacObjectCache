@@ -1,8 +1,9 @@
 # {eac}ObjectCache - SQLite powered WP_Object_Cache Drop-in.  
 [![EarthAsylum Consulting](https://img.shields.io/badge/EarthAsylum-Consulting-0?&labelColor=6e9882&color=707070)](https://earthasylum.com/)
 [![WordPress](https://img.shields.io/badge/WordPress-Plugins-grey?logo=wordpress&labelColor=blue)](https://wordpress.org/plugins/search/EarthAsylum/)
-[![eacDoojigger](https://img.shields.io/badge/Requires-{eac}Doojigger-da821d)](https://eacDoojigger.earthasylum.com/)  
-<details><summary>Plugin Header</summary><samp><small>
+[![eacDoojigger](https://img.shields.io/badge/Requires-{eac}Doojigger-da821d)](https://eacDoojigger.earthasylum.com/)
+
+<details><summary>Plugin Header</summary><samp>
 
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
@@ -17,7 +18,8 @@ License:            GPLv3 or later
 License URI:        https://www.gnu.org/licenses/gpl.html  
 Tags:               cache, object cache, wp cache, sqlite, performance, {eac}Doojigger,  
 WordPress URI:		https://wordpress.org/plugins/eacobjectcache  
-</small></samp></details>
+GitHub URI:			https://github.com/EarthAsylum/eacObjectCache  
+</samp></details>
 
 **_{eac}ObjectCache is a drop-in persistent object cache using a SQLite database to cache WordPress objects._**
 
