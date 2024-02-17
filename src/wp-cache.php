@@ -8,7 +8,8 @@
  * @subpackage Cache
  */
 
-defined( 'EAC_OBJECT_CACHE' ) || exit;
+defined( 'ABSPATH' ) || exit;
+defined( 'EAC_OBJECT_CACHE_VERSION' ) || exit;
 
 /**
  * Sets up Object Cache Global and assigns it.

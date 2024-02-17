@@ -19,7 +19,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '23.1210.1';
+		const VERSION	= '24.0217.1';
 
 
 		/**
@@ -120,7 +120,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 
 			if ($this->checkForInstall('admin') === true && $this->checkForInstall('source') === true)
 			{
-				$default = $this->varPost('_btnCacheInstall') ?: ((defined('EAC_OBJECT_CACHE')) ? 'Install' : 'Uninstall');
+				$default = $this->varPost('_btnCacheInstall') ?: ((defined('EAC_OBJECT_CACHE_VERSION')) ? 'Install' : 'Uninstall');
 				$default = ($default=='Install') ? 'Uninstall' : 'Install';
 				$this->registerExtensionOptions( [$this->registerAs,$this->registerTab],
 					[
@@ -136,7 +136,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 				);
 			}
 
-			if (defined('EAC_OBJECT_CACHE'))
+			if (defined('EAC_OBJECT_CACHE_VERSION'))
 			{
 				global $wp_object_cache;
 				$stats = $wp_object_cache->getStats();
@@ -481,7 +481,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		{
 			if ( ! parent::initialize() ) return; // disabled
 
-			if (defined('EAC_OBJECT_CACHE'))
+			if (defined('EAC_OBJECT_CACHE_VERSION'))
 			{
 				global $wp_object_cache;
 				$wp_object_cache->display_stats 	= $this->get_option('object_cache_stats');
@@ -546,7 +546,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 			// check 3rd-party object cache
 			if ($check == 'all' || $check == 'existing')
 			{
-				if (file_exists(WP_CONTENT_DIR.'/object-cache.php') && !defined('EAC_OBJECT_CACHE'))
+				if (file_exists(WP_CONTENT_DIR.'/object-cache.php') && !defined('EAC_OBJECT_CACHE_VERSION'))
 				{
 					$plugin_data = get_plugin_data( WP_CONTENT_DIR.'/object-cache.php', true );
 					if ( ! $plugin_data['Title'] ) $plugin_data['Title'] = '3rd Party Object Cache';
@@ -648,7 +648,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		 */
 		public function adminVersionUpdate($curVersion,$newVersion)
 		{
-			if (defined('EAC_OBJECT_CACHE'))
+			if (defined('EAC_OBJECT_CACHE_VERSION'))
 			{
 				$this->install_object_cache('update');
 			}

@@ -4,7 +4,7 @@
  *
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.0.1
+ * Version:				1.0.2
  * Requires at least:	5.5.0
  * Tested up to:		6.4
  * Requires PHP:		7.4
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE','1.0.1');
+define('EAC_OBJECT_CACHE_VERSION','1.0.2');
 
 /**
  *
@@ -1726,7 +1726,7 @@ class WP_Object_Cache
 		echo "<strong>Cache Hits:</strong> ".number_format($this->cache_stats['cache hits'],0)."<br />";
 		echo "<strong>Cache Misses:</strong> ".number_format($this->cache_stats['cache misses'])."<br />";
 		echo "<strong>Cache Ratio:</strong> ".
-			$this->cache_hit_ratio($this->cache_stats['cache hits'],$this->cache_stats['cache misses']);
+			esc_attr( $this->cache_hit_ratio($this->cache_stats['cache hits'],$this->cache_stats['cache misses']) );
 		echo "</p>\n";
 
 		echo "<p><strong>Cache Counts:</strong></p><ul>";
@@ -1833,7 +1833,7 @@ class WP_Object_Cache
 
 		$stats = array();
 		$stats['id'] = array(
-			self::PLUGIN_NAME	=> EAC_OBJECT_CACHE,
+			self::PLUGIN_NAME	=> EAC_OBJECT_CACHE_VERSION,
 			'cache file'		=> ($this->db)
 					? '~/'.trailingslashit(basename($this->cache_folder)) . $this->cache_file
 					: 'memory-only',

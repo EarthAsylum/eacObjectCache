@@ -7,8 +7,8 @@
 
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
-Stable tag:         1.0.1  
-Last Updated:       24-Jan-2024  
+Stable tag:         1.0.2  
+Last Updated:       17-Feb-2024  
 Requires at least:  5.5.0  
 Tested up to:       6.4  
 Requires PHP:       7.4  
