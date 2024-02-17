@@ -1748,7 +1748,7 @@ class WP_Object_Cache
 		}
 		echo "</ul>\n";
 
-		echo "<p>* ".esc_attr(self::PLUGIN_NAME)." v".esc_attr(EAC_OBJECT_CACHE)."</p>\n";
+		echo "<p>* ".esc_attr(self::PLUGIN_NAME)." v".esc_attr(EAC_OBJECT_CACHE_VERSION)."</p>\n";
 	}
 
 
