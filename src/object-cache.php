@@ -4,7 +4,7 @@
  *
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.0.2
+ * Version:				1.0.3
  * Requires at least:	5.5.0
  * Tested up to:		6.4
  * Requires PHP:		7.4
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE_VERSION','1.0.2');
+define('EAC_OBJECT_CACHE_VERSION','1.0.3');
 
 /**
  *
@@ -329,9 +329,9 @@ class WP_Object_Cache
 	 */
 	public function __construct()
 	{
-		$this->time_now = time();
-		$this->multisite = is_multisite();
-		$this->switch_to_blog( get_current_blog_id() );
+		$this->time_now 	= time();
+		$this->multisite 	= is_multisite();
+		$this->blog_id 		= get_current_blog_id();
 
 		$this->get_defined_options();
 
@@ -456,7 +456,7 @@ class WP_Object_Cache
 				");
 				break;
 			} catch ( Exception $ex ) {
-				$this->error_log(__FUNCTION__,$ex);
+				$this->error_log(__METHOD__,$ex);
 				$this->db = null;
 				usleep($this->sleep_time);
 			}
@@ -473,9 +473,9 @@ class WP_Object_Cache
 					);
 					CREATE INDEX IF NOT EXISTS expire ON wp_cache (expire);
 				");
-				$this->error_log(__FUNCTION__,"L2 cache created");
+				$this->error_log(__METHOD__,"L2 cache created");
 			} catch ( Exception $ex ) {
-				$this->error_log(__FUNCTION__,$ex);
+				$this->error_log(__METHOD__,$ex);
 				$this->db = null;
 				return false;
 			}
@@ -553,7 +553,7 @@ class WP_Object_Cache
 			$this->addStats('L2 selects',1);
 			$stmt->closeCursor();
 		} catch ( Exception $ex ) {
-			$this->error_log(__FUNCTION__,$ex);
+			$this->error_log(__METHOD__,$ex);
 		}
 
 		return $row;
@@ -602,7 +602,7 @@ class WP_Object_Cache
 			$this->addStats('L2 selects',1);
 			$stmt->closeCursor();
 		} catch ( Exception $ex ) {
-			$this->error_log(__FUNCTION__,$ex);
+			$this->error_log(__METHOD__,$ex);
 		}
 
 		return ($rows) ? $rows : [];
@@ -626,7 +626,7 @@ class WP_Object_Cache
 			$blogkey		= $row['blog'].'|'.$row['key'];
 			$this->L1_cache[ $row['group'] ][ $blogkey ] = [ 'value'=>$row['value'], 'expire'=>$row['expire'] ];
 		} else { // this shouldn't ever happen
-			$this->error_log(__FUNCTION__,'invalid key format ['.$key.']');
+			$this->error_log(__METHOD__,'invalid key format ['.$key.']');
 		}
 		return $row;
 	}
@@ -647,8 +647,8 @@ class WP_Object_Cache
 	private function get_valid_key( $key, $group )
 	{
 		if ( is_int( $key ) || ( is_string( $key ) && trim( $key ) !== '' ) ) {
-			$blog = ( $this->multisite && !isset( $this->global_groups[ $group ] ) ) ? $this->blog_id : 0;
-			return sprintf( "%05d|%s", $blog, $key );
+			$blog_id = ( $this->multisite && !isset( $this->global_groups[ $group ] ) ) ? $this->blog_id : 0;
+			return sprintf( "%05d|%s", $blog_id, $key );
 		}
 
 		$type = gettype( $key );
@@ -1138,11 +1138,13 @@ class WP_Object_Cache
 			$this->db->beginTransaction();
 			$result = $this->db->query("DELETE FROM wp_cache;");
 			$this->db->commit();
-			$this->error_log(__FUNCTION__,'cache flushed, '.
+			if ($result->rowCount()) {
+				$this->error_log(__METHOD__,'cache flushed, '.
 					$result->rowCount()." records deleted");
+			}
 			$this->addStats('flushed cache',$result->rowCount());
 		} catch ( Exception $ex ) {
-			$this->error_log(__FUNCTION__,$ex);
+			$this->error_log(__METHOD__,$ex);
 			$this->db->rollBack();
 			return false;
 		}
@@ -1176,11 +1178,13 @@ class WP_Object_Cache
 			$this->db->beginTransaction();
 			$stmt->execute();
 			$this->db->commit();
-			$this->error_log(__FUNCTION__,"cache flushed for '{$group}', ".
+			if ($result->rowCount()) {
+				$this->error_log(__METHOD__,"cache flushed for '{$group}', ".
 					$stmt->rowCount()." records deleted");
+			}
 			$this->addStats("flushed {$group}",$stmt->rowCount());
 		} catch ( Exception $ex ) {
-			$this->error_log(__FUNCTION__,$ex);
+			$this->error_log(__METHOD__,$ex);
 			$this->db->rollBack();
 			return false;
 		}
@@ -1208,7 +1212,7 @@ class WP_Object_Cache
 
 		if ( ! $this->db ) return false;
 
-		if (!is_int($blog_id)) $blog_id = get_current_blog_id();
+		if (!is_int($blog_id)) $blog_id = $this->blog_id;
 
 		if (is_null($stmt)) {
 			$stmt = $this->db->prepare("DELETE FROM wp_cache WHERE key LIKE :blog;");
@@ -1219,11 +1223,13 @@ class WP_Object_Cache
 			$this->db->beginTransaction();
 			$stmt->execute();
 			$this->db->commit();
-			$this->error_log(__FUNCTION__,"cache flushed for blog id {$blog_id}, ".
+			if ($result->rowCount()) {
+				$this->error_log(__METHOD__,"cache flushed for blog id {$blog_id}, ".
 					$stmt->rowCount()." records deleted");
+			}
 			$this->addStats("flushed blog id {$blog_id}",$stmt->rowCount());
 		} catch ( Exception $ex ) {
-			$this->error_log(__FUNCTION__,$ex);
+			$this->error_log(__METHOD__,$ex);
 			$this->db->rollBack();
 			return false;
 		}
@@ -1239,6 +1245,7 @@ class WP_Object_Cache
 	 */
 	public function flush_runtime(): bool
 	{
+		$this->do_cache_misses(true);
 		$this->write_cache();
 		$this->L1_cache = array();
 		return true;
@@ -1381,7 +1388,9 @@ class WP_Object_Cache
 	 */
 	public function switch_to_blog( $blog_id )
 	{
+		$this->flush_runtime();
 		$this->blog_id = $this->multisite ? (int) $blog_id : 0;
+		$this->load_prefetch_groups();
 	}
 
 
@@ -1393,7 +1402,7 @@ class WP_Object_Cache
 	 */
 	public function reset()
 	{
-		_deprecated_function( __FUNCTION__, '3.5.0', 'WP_Object_Cache::switch_to_blog()' );
+		_deprecated_function( __METHOD__, '3.5.0', 'WP_Object_Cache::switch_to_blog()' );
 		$this->switch_to_blog( get_current_blog_id() );
 	}
 
@@ -1439,7 +1448,7 @@ class WP_Object_Cache
 					);
 					$this->db->commit();
 				} catch ( Exception $ex ) {
-					$this->error_log(__FUNCTION__,$ex);
+					$this->error_log(__METHOD__,$ex);
 					$this->db->rollBack();
 				}
 			}
@@ -1576,7 +1585,7 @@ class WP_Object_Cache
 					$this->addStats('L2 commits',1);
 					break;
 				} catch ( Exception $ex ) {
-					$this->error_log(__FUNCTION__,$ex);
+					$this->error_log(__METHOD__,$ex);
 					$this->db->rollBack();
 					usleep($this->sleep_time);
 				}
@@ -1600,7 +1609,7 @@ class WP_Object_Cache
 					$this->addStats('L2 commits',1);
 					break;
 				} catch ( Exception $ex ) {
-					$this->error_log(__FUNCTION__,$ex);
+					$this->error_log(__METHOD__,$ex);
 					$this->db->rollBack();
 					usleep($this->sleep_time);
 				}
@@ -1665,7 +1674,7 @@ class WP_Object_Cache
 				unlink($cacheName.$ext);
 			}
 		}
-		$this->error_log(__FUNCTION__,"L2 cache deleted");
+		$this->error_log(__METHOD__,"L2 cache deleted");
 	}
 
 
@@ -1696,7 +1705,7 @@ class WP_Object_Cache
 					 "<p>WP Object Cache: ".esc_attr($message)."</p></div>";
 			}
 
-			$message = "WP_object_cache->".$source.' : '.$message.$trace;
+			$message = $source.' : '.$message.$trace;
 			error_log($message);
 
 			if ($this->log_errors && function_exists('eacDoojigger')) {
@@ -1955,6 +1964,10 @@ class WP_Object_Cache
 
 		// import transients from options table
 
+		// so we don't try to use this cache
+		wp_using_ext_object_cache( false );
+		$installing = wp_installing( true );
+
 		$optionSQL =
 			"SELECT option_name as name, option_value as value".
 			"  FROM {$wpdb->options} WHERE option_name LIKE %s AND option_name NOT LIKE %s";
@@ -1964,12 +1977,9 @@ class WP_Object_Cache
 		);
 
 		if ($transients && !is_wp_error($transients)) {
-			// so we don't try to use this cache
-			wp_using_ext_object_cache( false );
 			foreach ($transients as $row) {
 				$this->add_wp_transient($row,'transient');
 			}
-			wp_using_ext_object_cache( true );
 		}
 
 		// import site transients from options or sitemeta table
@@ -1984,13 +1994,13 @@ class WP_Object_Cache
 		);
 
 		if ($transients && !is_wp_error($transients)) {
-			// so we don't try to use this cache
-			wp_using_ext_object_cache( false );
 			foreach ($transients as $row) {
 				$this->add_wp_transient($row,'site-transient');
 			}
-			wp_using_ext_object_cache( true );
 		}
+
+		wp_using_ext_object_cache( true );
+		wp_installing( $installing );
 
 		$this->set('transients', [ wp_date('c'),$this->cache_stats['transients imported'] ], self::GROUP_ID, 0);
 		$this->set_delayed_writes();
@@ -2017,7 +2027,7 @@ class WP_Object_Cache
 
 		if ($expire) {
 			if ($expire <= $this->time_now) return;
-			$expire = $this->time_now - $expire;
+			$expire = $expire - $this->time_now;
 		}
 
 		$this->set($key, maybe_unserialize($record->value), $group, $expire);

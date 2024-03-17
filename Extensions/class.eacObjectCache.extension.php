@@ -19,7 +19,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '24.0217.1';
+		const VERSION	= '24.0317.1';
 
 
 		/**
@@ -165,7 +165,8 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 								'options'	=>	[ 'Disabled'=>'','Use Current Request'=>'current','Use Last Sample'=>'sample' ],
 								'default'	=>	'',
 								'info'		=> 	'Display object cache counts in a notification block on administrator pages.',
-								'attributes'=>	['onchange'=>'options_form.submit()'],
+								// attributes are on <span> not <input>
+								'attributes'=>	['onchange'=>'options_form.requestSubmit()'],
 						),
 					]
 				);
@@ -190,7 +191,8 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 								'info'		=> 	'When disabled all L2 cache updates occur in real time. '.
 												'When enabled, updates are held until the end of the script/page.',
 								'validate'	=>	[$this,'validate_config_option'],
-								'attributes'=>	['onchange'=>'options_form.submit()'],
+								// attributes are on <span> not <input>
+								'attributes'=>	['onchange'=>'options_form.requestSubmit()'],
 						),
 					]
 				);

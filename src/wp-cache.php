@@ -504,7 +504,7 @@ if (!function_exists('wp_cache_set_ref'))
  * 		https://developer.wordpress.org/reference/classes/wp_object_cache/
  */
 /*
-if (!function_exists('wp_cache_set_ref'))
+if (!function_exists('wp_cache_get_ref'))
 {
 	function wp_cache_get_ref( $key, $group = '', $force = false, &$found = null ) {
 		$wrapper = wp_cache_get( $key, $group, $force, $found );

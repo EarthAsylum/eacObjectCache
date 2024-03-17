@@ -1,8 +1,8 @@
 === {eac}ObjectCache - SQLite powered WP_Object_Cache Drop-in. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.0.2
-Last Updated:       17-Feb-2024
+Stable tag:         1.0.3
+Last Updated:       17-Mar-2024
 Requires at least:  5.5.0
 Tested up to:       6.4
 Requires PHP:       7.4
@@ -404,6 +404,14 @@ You should receive a copy of the GNU General Public License along with this prog
 
 == Changelog ==
 
+= Version 1.0.3 - March 17, 2024 =
+
++   Set wp_installing and fixed expiration when importing transients,
++   switch_to_blog() now flushes L1 and reloads prefetch groups.
++   flush_blog() use `$this->blog_id` instead of `get_current_blog_id()`.
++   Suppress flush message when 0 records flushed.
++   Use `options_form.requestSubmit()` instead of `options_form.submit()`.
+
 = Version 1.0.2 - February 17, 2024 =
 
 +   Minor updates as per WordPress review team.
@@ -418,7 +426,7 @@ You should receive a copy of the GNU General Public License along with this prog
 
 = Version 1.0.0 - December 9, 2023 =
 
-+   First public release.
++   First public release, submitted to WordPress review team.
 
 = Version 0.5 =
 
