@@ -1134,6 +1134,10 @@ class WP_Object_Cache
 
 		if ( ! $this->db ) return false;
 
+		$this->delete_cache_file();
+		return $this->connect_sqlite();
+
+	/*
 		try {
 			$this->db->beginTransaction();
 			$result = $this->db->query("DELETE FROM wp_cache;");
@@ -1150,6 +1154,7 @@ class WP_Object_Cache
 		}
 
 		return (bool)$result;
+	*/
 	}
 
 
@@ -1178,7 +1183,7 @@ class WP_Object_Cache
 			$this->db->beginTransaction();
 			$stmt->execute();
 			$this->db->commit();
-			if ($result->rowCount()) {
+			if ($stmt->rowCount()) {
 				$this->error_log(__METHOD__,"cache flushed for '{$group}', ".
 					$stmt->rowCount()." records deleted");
 			}
@@ -1223,7 +1228,7 @@ class WP_Object_Cache
 			$this->db->beginTransaction();
 			$stmt->execute();
 			$this->db->commit();
-			if ($result->rowCount()) {
+			if ($stmt->rowCount()) {
 				$this->error_log(__METHOD__,"cache flushed for blog id {$blog_id}, ".
 					$stmt->rowCount()." records deleted");
 			}

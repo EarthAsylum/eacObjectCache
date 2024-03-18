@@ -8,11 +8,11 @@
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
 Stable tag:         1.0.3  
-Last Updated:       17-Mar-2024  
+Last Updated:       18-Mar-2024  
 Requires at least:  5.5.0  
-Tested up to:       6.4  
+Tested up to:       6.5  
 Requires PHP:       7.4  
-Requires EAC:       2.4  
+Requires EAC:       2.5  
 Contributors:       [kevinburkholder](https://profiles.wordpress.org/kevinburkholder)  
 License:            GPLv3 or later  
 License URI:        https://www.gnu.org/licenses/gpl.html  
