@@ -25,6 +25,17 @@ namespace EarthAsylumConsulting;
  * License URI:			https://www.gnu.org/licenses/gpl.html
  */
 
+if (!defined('EAC_DOOJIGGER_VERSION'))
+{
+	\add_action( 'all_admin_notices', function()
+		{
+			echo '<div class="notice notice-error is-dismissible"><p>{eac}ObjectCache requires installation & activation of '.
+				 '<a href="https://eacdoojigger.earthasylum.com/eacdoojigger" target="_blank">{eac}Doojigger</a>.</p></div>';
+		}
+	);
+	return;
+}
+
 class eacObjectCache
 {
 	/**

@@ -2,7 +2,7 @@
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
 Stable tag:         1.0.3
-Last Updated:       18-Mar-2024
+Last Updated:       19-Mar-2024
 Requires at least:  5.5.0
 Tested up to:       6.5
 Requires PHP:       7.4
@@ -404,8 +404,9 @@ You should receive a copy of the GNU General Public License along with this prog
 
 == Changelog ==
 
-= Version 1.0.3 - March 18, 2024 =
+= Version 1.0.3 - March 19, 2024 =
 
++   Added notice if eacDoojigger is not active.
 +   Delete sqlite file(s) rather than records on flush.
 +   Set wp_installing and fixed expiration when importing transients,
 +   switch_to_blog() now flushes L1 and reloads prefetch groups.

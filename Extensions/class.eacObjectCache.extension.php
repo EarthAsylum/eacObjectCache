@@ -19,7 +19,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '24.0317.1';
+		const VERSION	= '24.0319.1';
 
 
 		/**
