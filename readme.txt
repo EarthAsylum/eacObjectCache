@@ -2,7 +2,7 @@
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
 Stable tag:         1.0.3
-Last Updated:       19-Mar-2024
+Last Updated:       03-Apr-2024
 Requires at least:  5.5.0
 Tested up to:       6.5
 Requires PHP:       7.4
@@ -346,8 +346,6 @@ wp_cache_add_prefetch_groups( $groups )
 
 **{eac}ObjectCache** is an extension plugin to and requires installation and registration of [{eac}Doojigger](https://eacDoojigger.earthasylum.com/).
 
-_\* Currently pending approval from the WordPress Plugin Repository._
-
 = Automatic Plugin Installation =
 
 This plugin is available from the [WordPress Plugin Repository](https://wordpress.org/plugins/search/earthasylum/) and can be installed from the WordPress Dashboard » *Plugins* » *Add New* page. Search for 'EarthAsylum', click the plugin's [Install] button and, once installed, click [Activate].
@@ -374,13 +372,13 @@ Once installed and activated options for this extension will show in the 'Tools'
 == Screenshots ==
 
 1. Object Cache (Tools)
-![{eac}ObjectCache](https://d2xk802d4616wu.cloudfront.net/eacobjectcache/assets/screenshot-1.png)
+![{eac}ObjectCache](https://ps.w.org/eacobjectcache/assets/screenshot-1.png)
 
 2. Object Cache (Advanced Options)
-![{eac}ObjectCache Advanced](https://d2xk802d4616wu.cloudfront.net/eacobjectcache/assets/screenshot-2.png)
+![{eac}ObjectCache Advanced](https://ps.w.org/eacobjectcache/assets/screenshot-2.png)
 
 3. Object Cache (Cache Stats)
-![{eac}ObjectCache Stats](https://d2xk802d4616wu.cloudfront.net/eacobjectcache/assets/screenshot-3.png)
+![{eac}ObjectCache Stats](https://ps.w.org/eacobjectcache/assets/screenshot-3.png)
 
 
 
@@ -404,7 +402,7 @@ You should receive a copy of the GNU General Public License along with this prog
 
 == Changelog ==
 
-= Version 1.0.3 - March 19, 2024 =
+= Version 1.0.3 - April 3, 2024 =
 
 +   Added notice if eacDoojigger is not active.
 +   Delete sqlite file(s) rather than records on flush.
