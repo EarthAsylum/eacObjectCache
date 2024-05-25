@@ -21,6 +21,16 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		 */
 		const VERSION	= '24.0319.1';
 
+		/**
+		 * @var string register name
+		 */
+		private $registerAs 	= 'Object Cache';
+
+		/**
+		 * @var string register tab
+		 */
+		private $registerTab 	= 'Object Cache';
+
 
 		/**
 		 * constructor method
@@ -38,10 +48,6 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 				$this->wpConfig = $this->wpconfig_handle();
 
 				$this->registerAs 	= 'Object Cache';
-				$this->registerTab 	=
-					($this->wpConfig && method_exists($this->plugin,'isAdvancedMode') && $this->plugin->isAdvancedMode('settings'))
-						? 'Object Cache'
-						: 'Tools';
 
 				register_activation_hook(dirname(__DIR__).'/eacObjectCache.php',function()
 					{
@@ -53,6 +59,19 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 						$this->install_object_cache('delete');
 					}
 				);
+				// advancedMode not until user is looaded
+			/*
+				add_action( 'set_current_user', 		function()
+					{
+						$this->registerTab 	=
+							( $this->wpConfig &&
+							  method_exists($this->plugin,'isAdvancedMode') &&
+							  $this->plugin->isAdvancedMode('settings') )
+								? 'Object Cache'
+								: 'Tools';
+					}
+				);
+			*/
 				$this->registerExtension( [$this->registerAs,$this->registerTab] );
 				// Register plugin options when needed
 				$this->add_action( "options_settings_page", array($this, 'admin_options_settings') );

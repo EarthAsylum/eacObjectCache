@@ -1,8 +1,8 @@
 === {eac}ObjectCache - SQLite powered WP_Object_Cache Drop-in. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.0.3
-Last Updated:       03-Apr-2024
+Stable tag:         1.0.4
+Last Updated:       24-May-2024
 Requires at least:  5.5.0
 Tested up to:       6.5
 Requires PHP:       7.4
@@ -366,12 +366,12 @@ See [Managing Plugins -> Manual Plugin Installation](https://wordpress.org/suppo
 
 = Settings =
 
-Once installed and activated options for this extension will show in the 'Tools' or 'Object Cache' tab of {eac}Doojigger settings.
+Once installed and activated options for this extension will show in the 'Object Cache' tab of {eac}Doojigger settings.
 
 
 == Screenshots ==
 
-1. Object Cache (Tools)
+1. Object Cache
 ![{eac}ObjectCache](https://ps.w.org/eacobjectcache/assets/screenshot-1.png)
 
 2. Object Cache (Advanced Options)
@@ -401,6 +401,10 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 1.0.4 - May 24, 2024 =
+
++   Fix for updated {eac}Doojigger Advanced Mode, remove from 'Tools' tab.
 
 = Version 1.0.3 - April 3, 2024 =
 
