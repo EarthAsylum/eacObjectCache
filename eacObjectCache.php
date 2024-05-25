@@ -14,7 +14,7 @@ namespace EarthAsylumConsulting;
  * @wordpress-plugin
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.0.3
+ * Version:				1.0.4
  * Requires at least:	5.5.0
  * Tested up to:		6.5
  * Requires PHP:		7.4
