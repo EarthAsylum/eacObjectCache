@@ -1,10 +1,10 @@
-=== {eac}ObjectCache - SQLite powered WP_Object_Cache Drop-in. ===
+=== {eac}Doojigger ObjectCache - SQLite powered WP_Object_Cache Drop-in. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
 Stable tag:         1.0.4
 Last Updated:       24-May-2024
-Requires at least:  5.5.0
-Tested up to:       6.5
+Requires at least:  5.8
+Tested up to:       6.6
 Requires PHP:       7.4
 Requires EAC:       2.5
 Contributors:       kevinburkholder

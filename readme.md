@@ -1,4 +1,4 @@
-## {eac}ObjectCache - SQLite powered WP_Object_Cache Drop-in.  
+## {eac}Doojigger ObjectCache - SQLite powered WP_Object_Cache Drop-in.  
 [![EarthAsylum Consulting](https://img.shields.io/badge/EarthAsylum-Consulting-0?&labelColor=6e9882&color=707070)](https://earthasylum.com/)
 [![WordPress](https://img.shields.io/badge/WordPress-Plugins-grey?logo=wordpress&labelColor=blue)](https://wordpress.org/plugins/search/EarthAsylum/)
 [![eacDoojigger](https://img.shields.io/badge/Requires-%7Beac%7DDoojigger-da821d)](https://eacDoojigger.earthasylum.com/)
@@ -9,8 +9,8 @@ Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
 Stable tag:         1.0.4  
 Last Updated:       24-May-2024  
-Requires at least:  5.5.0  
-Tested up to:       6.5  
+Requires at least:  5.8  
+Tested up to:       6.6  
 Requires PHP:       7.4  
 Requires EAC:       2.5  
 Contributors:       [kevinburkholder](https://profiles.wordpress.org/kevinburkholder)  
