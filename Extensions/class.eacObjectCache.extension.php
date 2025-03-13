@@ -9,8 +9,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 	 * @category	WordPress Plugin
 	 * @package		{eac}Doojigger Utilities\{eac}Doojigger Object Cache
 	 * @author		Kevin Burkholder <KBurkholder@EarthAsylum.com>
-	 * @copyright	Copyright (c) 2023 EarthAsylum Consulting <www.EarthAsylum.com>
-	 * @version		1.x
+	 * @copyright	Copyright (c) 2024 EarthAsylum Consulting <www.EarthAsylum.com>
 	 * @link		https://eacDoojigger.earthasylum.com/
 	 */
 
@@ -19,17 +18,20 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '24.0319.1';
+		const VERSION	= '25.0312.1';
 
 		/**
-		 * @var string register name
+		 * @var string to set default tab name
 		 */
-		private $registerAs 	= 'Object Cache';
+		const TAB_NAME	= 'Object Cache';
 
 		/**
-		 * @var string register tab
+		 * @var string|array|bool to set (or disable) default group display/switch
+		 * 		false 		disable the 'Enabled'' option for this group
+		 * 		string 		the label for the 'Enabled' option
+		 * 		array 		override options for the 'Enabled' option (label,help,title,info, etc.)
 		 */
-		private $registerTab 	= 'Object Cache';
+		const ENABLE_OPTION	= false;
 
 
 		/**
@@ -40,14 +42,11 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		 */
 		public function __construct($plugin)
 		{
-			$this->enable_option = false;
 			parent::__construct($plugin, self::ALLOW_ADMIN|self::ONLY_ADMIN|self::ALLOW_NETWORK);
 
 			if ($this->is_admin())
 			{
 				$this->wpConfig = $this->wpconfig_handle();
-
-				$this->registerAs 	= 'Object Cache';
 
 				register_activation_hook(dirname(__DIR__).'/eacObjectCache.php',function()
 					{
@@ -59,20 +58,8 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 						$this->install_object_cache('delete');
 					}
 				);
-				// advancedMode not until user is looaded
-			/*
-				add_action( 'set_current_user', 		function()
-					{
-						$this->registerTab 	=
-							( $this->wpConfig &&
-							  method_exists($this->plugin,'isAdvancedMode') &&
-							  $this->plugin->isAdvancedMode('settings') )
-								? 'Object Cache'
-								: 'Tools';
-					}
-				);
-			*/
-				$this->registerExtension( [$this->registerAs,$this->registerTab] );
+
+				$this->registerExtension( self::TAB_NAME );
 				// Register plugin options when needed
 				$this->add_action( "options_settings_page", array($this, 'admin_options_settings') );
 				// Add contextual help
@@ -92,7 +79,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 
 			if ( $check !== true )
 			{
-				$this->registerExtensionOptions( [$this->registerAs,$this->registerTab],
+				$this->registerExtensionOptions( self::TAB_NAME,
 					[
 						'_sqlite_version' 	=> array(
 								'type'		=> 	'display',
@@ -108,7 +95,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 
 			if ( $check !== true )
 			{
-				$this->registerExtensionOptions( [$this->registerAs,$this->registerTab],
+				$this->registerExtensionOptions( self::TAB_NAME,
 					[
 						'_pdo_missing' 		=> array(
 								'type'		=> 	'display',
@@ -124,7 +111,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 
 			if ( $check !== true )
 			{
-				$this->registerExtensionOptions( [$this->registerAs,$this->registerTab],
+				$this->registerExtensionOptions( self::TAB_NAME,
 					[
 						'_3rd_party' 		=> array(
 								'type'		=> 	'display',
@@ -141,7 +128,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 			{
 				$default = $this->varPost('_btnCacheInstall') ?: ((defined('EAC_OBJECT_CACHE_VERSION')) ? 'Install' : 'Uninstall');
 				$default = ($default=='Install') ? 'Uninstall' : 'Install';
-				$this->registerExtensionOptions( [$this->registerAs,$this->registerTab],
+				$this->registerExtensionOptions( self::TAB_NAME,
 					[
 						'_btnCacheInstall' 	=> array(
 								'type'		=> 	'button',
@@ -160,14 +147,14 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 				global $wp_object_cache;
 				$stats = $wp_object_cache->getStats();
 				$stats = $stats['database-groups']['Total'] ?? [0,0];
-				$this->registerExtensionOptions( [$this->registerAs,$this->registerTab],
+				$this->registerExtensionOptions( self::TAB_NAME,
 					[
 						'_btnCacheFlush' 	=> array(
 								'type'		=> 	'button',
 								'label'		=> 	'Flush Objects',
 								'default'	=> 	'Erase Cache',
-								'info'		=>	'Erase the persistent object cache.<br>'.
-												'<small>* The cache database currently has '.
+								'tooltip'	=>	'Erase the persistent object cache.',
+								'info'		=>	'<small>* The cache database currently has '.
 												'<output style="color:blue;">'.number_format($stats[0],0).'</output>'.
 												' records using over '.
 												'<output style="color:blue;">'.number_format($stats[1] / MB_IN_BYTES, 2).'mb</output>'.
@@ -176,7 +163,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 						),
 					]
 				);
-				$this->registerExtensionOptions( [$this->registerAs,$this->registerTab],
+				$this->registerExtensionOptions( self::TAB_NAME,
 					[
 						'object_cache_stats'	=> array(
 								'type'		=> 	'radio',
@@ -200,7 +187,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 					return;
 				}
 
-				$this->registerExtensionOptions( [$this->registerAs,$this->registerTab],
+				$this->registerExtensionOptions( self::TAB_NAME,
 					[
 						'_delayed_writes'	=> array(
 								'type'		=> 	'radio',
@@ -228,13 +215,33 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		{
 			global $wp_object_cache;
 
-			$this->registerExtensionOptions( [$this->registerAs,$this->registerTab],
+			$this->registerExtensionOptions( self::TAB_NAME,
 				[
 					'_advanced'			=> array(
 							'type'		=> 	'display',
 							'label'		=> 	'<p><span class="dashicons dashicons-performance"></span></p>',
 							'default'	=>	'<p><strong>Advanced options update settings in the wp-config.php file.</strong></p>',
 					),
+					'_mmap_size'			=> array(
+							'type'		=> 	'select',
+							'label'		=> 	'Memory Mapped I/O',
+							'options'	=>  [
+												"Disabled"				=>  0,
+												"2MB"					=>  2 * 1024 * 1024,
+												"4MB"					=>  4 * 1024 * 1024,
+												"8MB"					=>  8 * 1024 * 1024,
+												"12MB"					=> 12 * 1024 * 1024,
+												"16MB"					=> 16 * 1024 * 1024,
+												"24MB"					=> 24 * 1024 * 1024,
+												"32MB"					=> 32 * 1024 * 1024,
+												"64MB"					=> 64 * 1024 * 1024,
+												"128MB"					=> 128 * 1024 * 1024,
+											],
+							'default'	=>	(int)$wp_object_cache->mmap_size,
+							'info'		=> 	'Sets the maximum number of bytes that are set aside for memory-mapped I/O.',
+							'validate'	=>	[$this,'validate_config_option'],
+					),
+
 					'_timeout'			=> array(
 							'type'		=> 	'number',
 							'label'		=> 	'Cache Timeout',
@@ -329,7 +336,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 							'label'		=>	"Non-Persistent Groups ",
 							'default'	=>	 (defined('EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS') && is_array(EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS))
 												? implode(', ',EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS) : '',
-							'info'		=>	"Cache groups that should not be stored in the cache table.",
+							'info'		=>	"Cache groups that should not be stored in the L2 cache table.",
 							'help'		=>	"[info] Non-persistent groups are object groups that do not persist across page loads. ".
 											"This may be another method to alleviate issues caused by cache persistence ".
 											"or improve performance by limiting cache data.",
@@ -342,7 +349,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 							'label'		=>	"Pre-fetch Groups ",
 							'default'	=>	 (defined('EAC_OBJECT_CACHE_PREFETCH_GROUPS') && is_array(EAC_OBJECT_CACHE_PREFETCH_GROUPS))
 												? implode(', ',EAC_OBJECT_CACHE_PREFETCH_GROUPS) : '',
-							'info'		=>	"Pre-fetch specific object groups from disk at startup.",
+							'info'		=>	"Pre-fetch specific object groups from L2 cache at startup.",
 							'help'		=>	"[info] Pre-fretching a group of records may be much faster than loading each key individually, ".
 											"but may load keys that are not neaded, using memory unnecessarily.",
 							'validate'	=>	[$this,'validate_config_option'],
@@ -370,6 +377,11 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 			global $wp_object_cache;
 			switch ($fieldName)
 			{
+				case '_mmap_size':
+					if ($value == $wp_object_cache->mmap_size) return $value; 	// no change
+					$value = (is_numeric($value)) ? (int)$value : 3;
+					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_MMAP_SIZE', "{$value}", ['raw'=>true] );
+					break;
 				case '_timeout':
 					if ($value == $wp_object_cache->pdo_timeout) return $value; 	// no change
 					$value = (is_numeric($value)) ? (int)$value : 3;
@@ -425,7 +437,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		 */
  		public function admin_options_help()
 		{
-			if (!$this->plugin->isSettingsPage($this->registerTab)) return;
+			if (!$this->plugin->isSettingsPage(self::TAB_NAME)) return;
 
 			ob_start();
 			?>
@@ -446,6 +458,15 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 			<li>To set SQLite journal mode (default: 'WAL', Write-Ahead Log):<br>
 				<code>define( 'EAC_OBJECT_CACHE_JOURNAL_MODE', journal_mode )</code>
 				<br><small>journal_mode is one of 'DELETE', 'TRUNCATE', 'PERSIST', 'MEMORY', 'WAL', or 'OFF'</small>
+
+			<li>To set SQLite mapped memory I/O (default: 0):<br>
+				<code>define( 'EAC_OBJECT_CACHE_MMAP_SIZE', int )</code>
+
+			<li>To set SQLite page size (default: 4096):<br>
+				<code>define( 'EAC_OBJECT_CACHE_PAGE_SIZE', int )</code>
+
+			<li>To set SQLite cache size (default: -2000 [2,048,000]):<br>
+				<code>define( 'EAC_OBJECT_CACHE_CACHE_SIZE', int )</code>
 
 			<li>To set SQLite timeout in seconds (default: 3)<br>
 				<code>define( 'EAC_OBJECT_CACHE_TIMEOUT', int );</code>
@@ -483,7 +504,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 			<?php
 			$content = ob_get_clean();
 
-			$this->addPluginHelpTab($this->registerTab,$content,['Object Cache','open']);
+			$this->addPluginHelpTab(self::TAB_NAME,$content,[self::TAB_NAME,'open']);
 
 			$this->addPluginSidebarLink(
 				"<span class='dashicons dashicons-performance'></span>{eac}ObjectCache",
@@ -534,12 +555,12 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 			if ($check == 'all' || $check == 'version')
 			{
 				$version = (class_exists('\SQLite3')) ? \SQLite3::version()['versionString'] : '';
-				if ( version_compare( $version, '3.8.0' ) < 0 )
+				if ( version_compare( $version, '3.24.0' ) < 0 )
 				{
 					return [
 						'type'		=>	'version',
 						'data'		=>	$version,
-						'message'	=> 	'{eac}ObjectCache requires SQLite v3.8.0 or greater. '.
+						'message'	=> 	'{eac}ObjectCache requires SQLite v3.24.0 or greater. '.
 											($version ? "Version {$version} is currently installed." : '').'.'
 					];
 				}
@@ -596,7 +617,8 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 			// check source to install
 			if ($check == 'all' || $check == 'source')
 			{
-				if (!file_exists(dirname(__DIR__).'/src/object-cache.php'))
+				if ( !file_exists(dirname(__DIR__).'/src/object-cache.php') ||
+					 !file_exists(dirname(__DIR__).'/src/wp-cache.php'))
 				{
 					return [
 						'type'		=>	'source',
@@ -627,8 +649,8 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 			if ($action == 'uninstall' || $action == 'delete')
 			{
 				global $wp_object_cache;
-				if (method_exists($wp_object_cache,'delete_cache_file')) {
-					$wp_object_cache->delete_cache_file();
+				if (method_exists($wp_object_cache,'uninstall')) {
+					$wp_object_cache->uninstall();
 				}
 			}
 			else if ($fs = $this->fs->load_wp_filesystem())

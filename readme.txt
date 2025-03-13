@@ -1,12 +1,12 @@
 === {eac}Doojigger ObjectCache - SQLite powered WP_Object_Cache Drop-in. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.0.4
-Last Updated:       24-May-2024
+Stable tag:         1.1.0
+Last Updated:       13-Mar-2025
 Requires at least:  5.8
-Tested up to:       6.6
+Tested up to:       6.7
 Requires PHP:       7.4
-Requires EAC:       2.5
+Requires EAC:       3.0
 Contributors:       kevinburkholder
 License:            GPLv3 or later
 License URI:        https://www.gnu.org/licenses/gpl.html
@@ -52,8 +52,9 @@ SQLite is a fast, small, single-file relational database engine. By using SQLite
     +   L2 group keys stored.
     +   L2 select/update/delete/commit counts.
 +   Supports a superset of WP_Object_Cache functions.
-+   Imports existing transients when enabled.
 +   Easily enabled or disabled from administrator page.
+    +   Imports existing transients when enabled.
+    +   Exports cached transients when disabled.
 +   Uses the PHP Data Objects (PDO) extension included with PHP.
 
 
@@ -96,13 +97,43 @@ See [SQLite journal mode](https://www.sqlite.org/pragma.html#pragma_journal_mode
 
 * * *
 
++   To set SQLite Mapped Memory I/O                             (default: 0):
+
+```
+    define( 'EAC_OBJECT_CACHE_MMAP_SIZE', int );
+```
+
+Sets the maximum number of bytes that are set aside for memory-mapped I/O.
+
+* * *
+
++   To set SQLite Page Size                                     (default: 4096):
+
+```
+    define( 'EAC_OBJECT_CACHE_PAGE_SIZE', int );
+```
+
+Sets the SQLite page size for the database.
+
+* * *
+
++   To set SQLite Cache Size                                    (default: -2000 [2,048,000]):
+
+```
+    define( 'EAC_OBJECT_CACHE_CACHE_SIZE', int );
+```
+
+Sets the maximum number of database disk pages that SQLite will hold in memory or the maximum amount of memory to use for page caching.
+
+* * *
+
 +   To set SQLite timeout                                       (default: 3):
 
 ```
     define( 'EAC_OBJECT_CACHE_TIMEOUT', int );
 ```
 
-Sets the number of seconds before a SQLite transaction may timeout in error:
+Sets the number of seconds before a SQLite transaction may timeout in error.
 
 * * *
 
@@ -391,7 +422,7 @@ Once installed and activated options for this extension will show in the 'Object
 
 == Copyright ==
 
-= Copyright © 2024, EarthAsylum Consulting, distributed under the terms of the GNU GPL. =
+= Copyright © 2025, EarthAsylum Consulting, distributed under the terms of the GNU GPL. =
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
@@ -401,6 +432,19 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 1.1.0 - March 13, 2025 =
+
++   Change SQLite `synchronous` from OFF to NORMAL.
++   Use `insert... on conflict` rather than `replace`.
++   Add SQLite `mmap_size` to enable memory mapped I/O.
++   Add SQLite `page_size` to adjust page size.
++   Add SQLite `cache_size` to adjust cache size.
++   Add `WITHOUT ROWID` when creating table.
++   Ensure correct blog id when building key in multisite environment.
++   Optimize pre-fetch.
++   Export cached transients back to MySql when disabled.
++   Requires Sqlite3 version 3.24.0.
 
 = Version 1.0.4 - May 24, 2024 =
 
