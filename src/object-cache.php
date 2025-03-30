@@ -4,7 +4,7 @@
  *
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.1.0
+ * Version:				1.2.0
  * Requires at least:	5.8
  * Tested up to:		6.7
  * Requires PHP:		7.4
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE_VERSION','1.1.0');
+define('EAC_OBJECT_CACHE_VERSION','1.2.0');
 
 /**
  *
@@ -70,11 +70,18 @@ define('EAC_OBJECT_CACHE_VERSION','1.1.0');
  * To pre-fetch group(s)
  *		define('EAC_OBJECT_CACHE_PREFETCH_GROUPS', [ 'groupA', 'groupB', ... ]);
  *
+ * To prevent outside actors from flushing caches.
+ *
+ * 		define( 'EAC_OBJECT_CACHE_DISABLE_FLUSH', true );
+ * 		define( 'EAC_OBJECT_CACHE_DISABLE_FULL_FLUSH', true );
+ * 		define( 'EAC_OBJECT_CACHE_DISABLE_GROUP_FLUSH', true );
+ * 		define( 'EAC_OBJECT_CACHE_DISABLE_BLOG_FLUSH', true );
+ * 		define( 'EAC_OBJECT_CACHE_DISABLE_RUNTIME_FLUSH', true );
  *
  * Get stats :
  *
  *		$wp_object_cache->htmlStats();
- *			outputs an html table of current stats
+ *			outputs an html table of current or last sample stats
  *			get (or set) $wp_object_cache->statsCSS to style
  *		$wp_object_cache->getStats();
  *			returns an array of current stats
@@ -105,6 +112,7 @@ class WP_Object_Cache
 	 * @var string
 	 */
 	const GROUP_ID				= '@object-cache';
+	const GROUP_ID_GLOBAL		= '@object-cache-global';
 
 	/**
 	 * path name to cache folder (EAC_OBJECT_CACHE_DIR)
@@ -200,15 +208,15 @@ class WP_Object_Cache
 	 *
 	 * @var int
 	 */
-	public $gc_probability		= 100;
+	public $gc_probability		= 1000;
 
 	/**
-	 * When true, outputs an admin notice with htmlStats().
+	 * Samples (every n requests) & outputs an admin notice with htmlStats().
 	 * can be changed with $wp_object_cache->display_stats
 	 *
 	 * @var bool
 	 */
-	public $display_stats		= false;
+	public $display_stats		= 0;
 
 	/**
 	 * display errors in an admin notice.
@@ -259,9 +267,9 @@ class WP_Object_Cache
 		'L2 pre-fetched (+)'	=> 0,	// records pre-fetched by group
 		'L2 pre-fetched (-)'	=> 0,	// misses pre-fetched by group
 		'L2 selects'			=> 0,	// number of sql selects
+		'L2 updates'			=> 0,	// number of records updated
+		'L2 deletes'			=> 0,	// number of records deleted
 		'L2 commits'			=> 0,	// number of sql transaction commits
-		'L2 updated'			=> 0,	// number of records updated
-		'L2 deleted'			=> 0,	// number of records deleted
 	);
 
 	/**
@@ -284,7 +292,9 @@ class WP_Object_Cache
 	 *
 	 * @var string[]
 	 */
-	private $global_groups		= array();
+	private $global_groups		= array(
+		self::GROUP_ID_GLOBAL	=> true,
+	);
 
 	/**
 	 * List of non-persistent cache groups.
@@ -302,6 +312,7 @@ class WP_Object_Cache
 	 */
 	private $perm_groups		= array(
 		self::GROUP_ID			=> true,
+		self::GROUP_ID_GLOBAL	=> true,
 		'transient'				=> true,
 		'site-transient'		=> true,
 	);
@@ -314,6 +325,7 @@ class WP_Object_Cache
 	 */
 	private $prefetch_groups 	= array(
 		self::GROUP_ID			=> true,
+		self::GROUP_ID_GLOBAL	=> true,
 	);
 
 	/**
@@ -334,18 +346,18 @@ class WP_Object_Cache
 	private $time_now;
 
 	/**
-	 * The blog prefix to prepend to keys in non-global groups.
-	 *
-	 * @var string
-	 */
-	private $blog_id;
-
-	/**
 	 * Holds the value of is_multisite().
 	 *
 	 * @var bool
 	 */
-	private $multisite;
+	private $is_multisite		= false;
+
+	/**
+	 * The blog prefix to prepend to keys in non-global groups.
+	 *
+	 * @var string
+	 */
+	private $blog_id			= 0;
 
 	/**
 	 * The SQLite database object.
@@ -361,14 +373,14 @@ class WP_Object_Cache
 
 
 	/**
-	 * Constructor, sets up object properties, SQLite database (wp_cache_init).
+	 * Constructor, sets up object properties, SQLite database.
+	 * Called from wp_cache_init();
 	 *
 	 */
 	public function __construct()
 	{
 		$this->time_now 	= time();
-		$this->multisite 	= is_multisite();
-		$this->blog_id 		= get_current_blog_id(); // always network id on construct
+		$this->is_multisite = is_multisite();
 
 		$this->get_defined_options();
 
@@ -378,33 +390,45 @@ class WP_Object_Cache
 			$this->connect_sqlite();
 		}
 
-		// as early as possible, safe on multisite
-		add_action('muplugins_loaded',function()
-			{
-				// because these are non-standard methods, nothing outside calls them
-				$this->add_permanent_groups();
-				$this->add_prefetch_groups();
-				$this->load_prefetch_groups();
-				$this->load_cache_misses();
-			}
-		);
+		// because these are non-standard methods, nothing outside calls them
+		$this->add_permanent_groups();
+		$this->add_prefetch_groups();
+	}
+
+
+	/**
+	 * Initialize, sets current blog id (imports transients).
+	 * Called from wp_cache_init();
+	 *
+	 */
+	public function init()
+	{
+		// because we may pull transients, which uses wp-cache, we must be instantiated
+		if (! $this->is_multisite) {
+			$this->switch_to_blog( get_current_blog_id() );
+		}
 
 		if (is_admin())
 		{
-			$this->display_errors = true;
 			add_action( 'admin_footer', function()
 				{
 					// this gets moved to the top of an admin page
-					if ($this->display_stats && is_admin_bar_showing()) {
+					if ($this->display_stats) {
 						echo "\n<style>".esc_html($this->statsCSS)."</style>\n";
 						echo "<div class='object-cache-notice notice notice-info'>";
 						echo "<details><summary>Object Cache...</summary>";
-						$this->htmlStats( ($this->display_stats=='sample') );
+						$this->htmlStats( (bool)$this->display_stats );
 						echo "</details></div>\n";
 					}
-				},1000
+				},PHP_INT_MAX - 100
 			);
 		}
+		add_action( 'shutdown', function()
+			{
+				// for Query Monitor/eacDoojigger logging
+				$this->getStatsCache(true);
+			},8 // before qm (9)
+		);
 	}
 
 
@@ -414,72 +438,50 @@ class WP_Object_Cache
 	 */
 	private function get_defined_options(): void
 	{
-		// cache directory (/wp-content/cache)
-		if (defined( 'EAC_OBJECT_CACHE_DIR' ) && is_string( EAC_OBJECT_CACHE_DIR )) {
-			$this->cache_folder = EAC_OBJECT_CACHE_DIR;
+		foreach(array(
+		//	option suffix		validation 		var name
+			['cache_dir', 		'is_string', 	'cache_folder'],	// cache directory (/wp-content/cache)
+			['cache_file', 		'is_string', 	'cache_file'],		// cache file name (.eac_object_cache.sqlite)
+			['journal_mode', 	'is_string', 	'journal_mode'],	// SQLite journal mode	(WAL)
+			['mmap_size', 		'is_int', 		'mmap_size'],		// SQLite mapped memory I/O
+			['page_size', 		'is_int', 		'page_size'],		// SQLite page size
+			['cache_size', 		'is_int', 		'cache_size'],		// SQLite cache size
+			['timeout', 		'is_int', 		'pdo_timeout'],		// PDO timeout (int)
+			['retries', 		'is_int', 		'max_retries'],		// database retries (int)
+			['delayed_writes',	 null, 			'delayed_writes'],	// delayed writes (true|false|int)
+			['default_expire', 	'is_int', 		'default_expire'],	// default expiration (-1|0|int)
+			['prefetch_misses', 'is_bool', 		'prefetch_misses'],	// pre-fetch cache misses (bool)
+			['probability', 	'is_int', 		'gc_probability'],	// maintenance/sampling probability (int)
+		) as $option) {
+			$this->get_defined_option(...$option);
 		}
+	}
 
-		// cache file name (.eac_object_cache.sqlite)
-		if (defined( 'EAC_OBJECT_CACHE_FILE' ) && is_string( EAC_OBJECT_CACHE_FILE )) {
-			$this->cache_file = EAC_OBJECT_CACHE_FILE;
+
+	/**
+	 * get a defined constant
+	 *
+	 * @param string $constant - the defined constant suffix
+	 * @param string $valid - validation callback
+	 * @param string $var - variable name to store value
+	 * @return mixed constant value or null
+	 */
+	private function get_defined_option(string $constant, $is_valid = null, $var = null)
+	{
+		$value = null;
+		$constant = sprintf( 'EAC_OBJECT_CACHE_%s', strtoupper( $constant ) );
+		if (defined( $constant )) {
+			$constant = constant($constant);
+			if (is_callable($is_valid)) {
+				$value = ($is_valid($constant)) ? $constant : null;
+			} else {
+				$value = $constant;
+			}
+			if (is_string($var) && !is_null($value)) { // don't overwrite null
+				$this->{$var} = $value;
+			}
 		}
-
-		// SQLite journal mode	(DELETE | TRUNCATE | PERSIST | MEMORY | WAL | OFF)
-		if (defined( 'EAC_OBJECT_CACHE_JOURNAL_MODE' ) && is_string( EAC_OBJECT_CACHE_JOURNAL_MODE )) {
-			$this->journal_mode = EAC_OBJECT_CACHE_JOURNAL_MODE;
-		}
-
-		// SQLite mapped memory I/O
-		if (defined( 'EAC_OBJECT_CACHE_MMAP_SIZE' ) && is_int( EAC_OBJECT_CACHE_MMAP_SIZE )) {
-			$this->mmap_size = EAC_OBJECT_CACHE_MMAP_SIZE;
-		}
-
-		// SQLite page size
-		if (defined( 'EAC_OBJECT_CACHE_PAGE_SIZE' ) && is_int( EAC_OBJECT_CACHE_PAGE_SIZE )) {
-			$this->page_size = EAC_OBJECT_CACHE_PAGE_SIZE;
-		}
-
-		// SQLite cache size
-		if (defined( 'EAC_OBJECT_CACHE_CACHE_SIZE' ) && is_int( EAC_OBJECT_CACHE_CACHE_SIZE )) {
-			$this->cache_size = EAC_OBJECT_CACHE_CACHE_SIZE;
-		}
-
-		// PDO timeout (int)
-		if (defined( 'EAC_OBJECT_CACHE_TIMEOUT' ) && is_int( EAC_OBJECT_CACHE_TIMEOUT )) {
-			$this->pdo_timeout = EAC_OBJECT_CACHE_TIMEOUT;
-		}
-
-		// database retries (int)
-		if (defined( 'EAC_OBJECT_CACHE_RETRIES' ) && is_int( EAC_OBJECT_CACHE_RETRIES )) {
-			$this->max_retries = EAC_OBJECT_CACHE_RETRIES;
-		}
-
-		// delayed writes (true|false|int)
-		if (defined( 'EAC_OBJECT_CACHE_DELAYED_WRITES' )) {
-			$this->delayed_writes = EAC_OBJECT_CACHE_DELAYED_WRITES;
-		}
-
-		// default expiration (-1|0|int)
-		if (defined( 'EAC_OBJECT_CACHE_DEFAULT_EXPIRE' ) && is_int( EAC_OBJECT_CACHE_DEFAULT_EXPIRE )) {
-			$this->default_expire = EAC_OBJECT_CACHE_DEFAULT_EXPIRE;
-		}
-
-		// pre-fetch cache misses (bool)
-		if (defined( 'EAC_OBJECT_CACHE_PREFETCH_MISSES' ) && is_bool( EAC_OBJECT_CACHE_PREFETCH_MISSES )) {
-			$this->prefetch_misses = EAC_OBJECT_CACHE_PREFETCH_MISSES;
-		}
-
-		// maintenance/sampling probability (int)
-		if (defined( 'EAC_OBJECT_CACHE_PROBABILITY' ) && is_int( EAC_OBJECT_CACHE_PROBABILITY )) {
-			$this->gc_probability = EAC_OBJECT_CACHE_PROBABILITY;
-		}
-
-		/* additional constants used...
-			EAC_OBJECT_CACHE_GLOBAL_GROUPS (array)
-			EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS (array)
-			EAC_OBJECT_CACHE_PERMANENT_GROUPS (array)
-			EAC_OBJECT_CACHE_PREFETCH_GROUPS (array)
-		 */
+		return $value;
 	}
 
 
@@ -503,6 +505,7 @@ class WP_Object_Cache
 				$this->db->exec("
 					PRAGMA encoding = 'UTF-8';
 					PRAGMA synchronous = NORMAL;
+					PRAGMA auto_vacuum = INCREMENTAL;
 					PRAGMA journal_mode = {$this->journal_mode};
 					PRAGMA mmap_size = {$this->mmap_size};
 					PRAGMA page_size = {$this->page_size};
@@ -518,12 +521,12 @@ class WP_Object_Cache
 
 		if ( ! $this->db ) return false;
 
-		return ($install) ? $this->install() : true;
+		return ($install) ? $this->install($cacheName) : true;
 	}
 
 
 	/*
-	 * readability (no setability) of private properties
+	 * compatibility methods
 	 */
 
 
@@ -535,7 +538,8 @@ class WP_Object_Cache
 	 * @param string $name Property to get.
 	 * @return mixed Property.
 	 */
-	public function __get( $name ) {
+	public function __get( $name )
+	{
 		return $this->$name;
 	}
 
@@ -548,8 +552,64 @@ class WP_Object_Cache
 	 * @param string $name Property to check if set.
 	 * @return bool Whether the property is set.
 	 */
-	public function __isset( $name ) {
+	public function __isset( $name )
+	{
 		return isset( $this->$name );
+	}
+
+
+	/**
+	 * Serves as a utility function to determine whether a key exists in the cache.
+	 *
+	 * @since 3.4.0
+	 *
+	 * @param int|string $key   Cache key to check for existence.
+	 * @param string     $group Cache group for the key existence check.
+	 * @return bool Whether the key exists in the cache for the given group.
+	 */
+	protected function _exists( $key, $group )
+	{
+		if ( ! $blogkey = $this->get_valid_key( $key, $group ) ) return false;
+		return $this->key_exists( $blogkey, $group );
+	}
+
+
+	/**
+	 * Serves as a utility function to determine whether a key is valid.
+	 *
+	 * @since 6.1.0
+	 *
+	 * @param int|string $key Cache key to check for validity.
+	 * @return bool Whether the key is valid.
+	 */
+	protected function is_valid_key( $key )
+	{
+		if ( is_int( $key ) ) {
+			return true;
+		}
+
+		if ( is_string( $key ) && trim( $key ) !== '' ) {
+			return true;
+		}
+
+		$type = gettype( $key );
+
+		if ( ! function_exists( '__' ) ) {
+			wp_load_translations_early();
+		}
+
+		$message = is_string( $key )
+			? __( 'Cache key must not be an empty string.' )
+			/* translators: %s: The type of the given cache key. */
+			: sprintf( __( 'Cache key must be an integer or a non-empty string, %s given.' ), $type );
+
+		_doing_it_wrong(
+			sprintf( '%s::%s', __CLASS__, debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 2 )[1]['function'] ),
+			$message,
+			'6.1.0'
+		);
+
+		return false;
 	}
 
 
@@ -612,8 +672,10 @@ class WP_Object_Cache
 		$selectkeys = [];
 		foreach ($blogkeys as $group => $keys) {
 			foreach ($keys as $blogkey) {
-				$this->L1_cache[ $group ][ $blogkey ] = false;
 				$selectkeys[] = $group.'|'.$blogkey;
+				if (!$like) {
+					$this->L1_cache[ $group ][ $blogkey ] = false;
+				}
 			}
 		}
 
@@ -664,7 +726,7 @@ class WP_Object_Cache
 			$blogkey		= $row['blog'].'|'.$row['key'];
 			$this->L1_cache[ $row['group'] ][ $blogkey ] = [ 'value'=>$row['value'], 'expire'=>$row['expire'] ];
 		} else { // this shouldn't ever happen
-			$this->error_log(__METHOD__,'invalid key format ['.$key.']');
+			$this->error_log(__METHOD__, 'invalid cache key format ['.$key.']');
 		}
 		return $row;
 	}
@@ -684,28 +746,11 @@ class WP_Object_Cache
 	 */
 	private function get_valid_key( $key, $group, $global = false )
 	{
-		$this->blog_id = get_current_blog_id(); // ensure we're current
-		if ( is_int( $key ) || ( is_string( $key ) && trim( $key ) !== '' ) ) {
-			$blog_id = ( $this->multisite && !isset( $this->global_groups[ $group ] ) )
+		if ($this->is_valid_key($key)) {
+			$blog_id = ( $this->is_multisite && !isset( $this->global_groups[ $group ] ) )
 				? $this->blog_id : 0;
 			return sprintf( "%05d|%s", $blog_id, $key );
 		}
-
-		$type = gettype( $key );
-
-		if ( ! function_exists( '__' ) ) {
-			wp_load_translations_early();
-		}
-
-		$message = is_string( $key )
-			? __( 'Cache key must not be an empty string.' )
-			/* translators: %s: The type of the given cache key. */
-			: sprintf( __( 'Cache key must be an integer or a non-empty string, %s given.' ), $type );
-		_doing_it_wrong(
-			sprintf( '%s::%s', __CLASS__, debug_backtrace( DEBUG_BACKTRACE_IGNORE_ARGS, 2 )[1]['function'] ),
-			$message,
-			'6.1.0'
-		);
 
 		return false;
 	}
@@ -994,7 +1039,7 @@ class WP_Object_Cache
 	{
 		if (empty( $group )) $group = 'default';
 
-		if ($result = $this->fetch($key, $group, true, $force)) {
+		if ($result = $this->get_cache($key, $group, true, $force)) {
 			$found = true;
 			return $result;
 		}
@@ -1004,12 +1049,12 @@ class WP_Object_Cache
 
 
 	/**
-	 * Internal fetch - get
+	 * Internal get_cache - get from L1 or L2 cache, with (get) or without (internal) counting hit/miss
 	 *
 	 * @param int|string $key	The key under which the cache contents are stored.
 	 * @param string	 $group Optional. Where the cache contents are grouped. Default 'default'.
 	 */
-	private function fetch( $key, $group = 'default', $count = false, $force = false )
+	protected function get_cache( $key, $group = 'default', $count = false, $force = false )
 	{
 		if ( ! $blogkey = $this->get_valid_key( $key, $group ) ) return false;
 
@@ -1179,13 +1224,33 @@ class WP_Object_Cache
 
 
 	/**
+	 * Is flushing enabled (allowed)
+	 *
+	 * @param string $type null | runtime | group | blog | full
+	 * @return bool sql result
+	 */
+	protected function is_flush_enabled( $type=null ): bool
+	{
+		if ($this->get_defined_option("disable_flush", 'is_bool')) {
+			return false;
+		}
+		return (!empty($type))
+			? ! (bool)$this->get_defined_option("disable_{$type}_flush", 'is_bool')
+			: true;
+	}
+
+
+	/**
 	 * Clears the object cache of all data.
 	 * SQLite triggers truncate optomizer
 	 *
+	 * @param bool $force used to override disabling constant.
 	 * @return bool sql result
 	 */
-	public function flush(): bool
+	public function flush(bool $force = false): bool
 	{
+		if (! $force && ! $this->is_flush_enabled('full')) return false;
+
 		$this->L1_cache = $this->L2_cache = array();
 
 		if ( ! $this->db ) return false;
@@ -1199,10 +1264,13 @@ class WP_Object_Cache
 	 * Removes all cache items in a group.
 	 *
 	 * @param string $group Name of group to remove from cache.
+	 * @param bool $force used to override disabling constant.
 	 * @return bool sql result
 	 */
-	public function flush_group( string $group ): bool
+	public function flush_group( string $group, bool $force = false ): bool
 	{
+		if (! $force && ! $this->is_flush_enabled('group')) return false;
+
 		static $stmt = null;
 
 		$this->write_cache();
@@ -1214,20 +1282,24 @@ class WP_Object_Cache
 			$stmt = $this->db->prepare("DELETE FROM wp_cache WHERE key LIKE :group;");
 		}
 
-		try {
-			$blogkey = $this->get_valid_key('%',$group);
-			$this->db->beginTransaction();
-			$stmt->execute( ['group' => $group.'|'.$blogkey] );
-			$this->db->commit();
-			if ($stmt->rowCount()) {
-				$this->error_log(__METHOD__,"cache flushed for '{$group}', ".
-					$stmt->rowCount()." records deleted");
+		$retries = 0;
+		while ( ++$retries <= $this->max_retries ) {
+			try {
+				$blogkey = $this->get_valid_key('%',$group);
+				$this->db->beginTransaction();
+				$stmt->execute( ['group' => $group.'|'.$blogkey] );
+				$this->db->commit();
+				if ($stmt->rowCount()) {
+					$this->error_log(__CLASS__,"cache flushed for group '{$group}', ".
+						$stmt->rowCount()." records deleted");
+				}
+				$this->addStats("flushed {$group}",$stmt->rowCount());
+				break;
+			} catch ( Exception $ex ) {
+				$this->db->rollBack();
+				$this->error_log(__METHOD__,$ex);
+				usleep($this->sleep_time);
 			}
-			$this->addStats("flushed {$group}",$stmt->rowCount());
-		} catch ( Exception $ex ) {
-			$this->error_log(__METHOD__,$ex);
-			$this->db->rollBack();
-			return false;
 		}
 
 		return (bool)$stmt;
@@ -1238,11 +1310,14 @@ class WP_Object_Cache
 	 * Removes all cache items tagged with a blog number.
 	 *
 	 * @param string $blog current blog
+	 * @param bool $force used to override disabling constant.
 	 * @return bool sql result
 	 */
-	public function flush_blog( $blog_id = null ): bool
+	public function flush_blog( $blog_id = null, bool $force = false ): bool
 	{
-		if (! $this->multisite) {
+		if (! $force && ! $this->is_flush_enabled('blog')) return false;
+
+		if (! $this->is_multisite) {
 			return $this->flush();
 		}
 
@@ -1259,19 +1334,23 @@ class WP_Object_Cache
 			$stmt = $this->db->prepare("DELETE FROM wp_cache WHERE key LIKE :blog;");
 		}
 
-		try {
-			$this->db->beginTransaction();
-			$stmt->execute( ['blog' => '%|'.sprintf("%05d", $blog_id).'|%'] );
-			$this->db->commit();
-			if ($stmt->rowCount()) {
-				$this->error_log(__METHOD__,"cache flushed for blog id {$blog_id}, ".
-					$stmt->rowCount()." records deleted");
+		$retries = 0;
+		while ( ++$retries <= $this->max_retries ) {
+			try {
+				$this->db->beginTransaction();
+				$stmt->execute( ['blog' => '%|'.sprintf("%05d", $blog_id).'|%'] );
+				$this->db->commit();
+				if ($stmt->rowCount()) {
+					$this->error_log(__CLASS__,"cache flushed for blog id {$blog_id}, ".
+						$stmt->rowCount()." records deleted");
+				}
+				$this->addStats("flushed blog id {$blog_id}",$stmt->rowCount());
+				break;
+			} catch ( Exception $ex ) {
+				$this->db->rollBack();
+				$this->error_log(__METHOD__,$ex);
+				usleep($this->sleep_time);
 			}
-			$this->addStats("flushed blog id {$blog_id}",$stmt->rowCount());
-		} catch ( Exception $ex ) {
-			$this->error_log(__METHOD__,$ex);
-			$this->db->rollBack();
-			return false;
 		}
 
 		return (bool)$stmt;
@@ -1279,15 +1358,19 @@ class WP_Object_Cache
 
 
 	/**
-	 * Clears the object cache of all data.
+	 * Saves & clears the L1 cache of all data.
 	 *
+	 * @param bool $force used to override disabling constant.
 	 * @return bool Always returns true.
 	 */
-	public function flush_runtime(): bool
+	public function flush_runtime(bool $force = false): bool
 	{
-		$this->save_cache_misses(true);
-		$this->write_cache();
-		$this->L1_cache = array();
+		if (! $force && ! $this->is_flush_enabled('runtime')) return false;
+
+		if ($force) { // internal, writes misses & cache
+			$this->write_cache();
+		}
+		$this->L1_cache = $this->L2_cache = array();
 		return true;
 	}
 
@@ -1380,10 +1463,8 @@ class WP_Object_Cache
 	private function get_defined_groups( string $constant ): array
 	{
 		$groups = [];
-		$constant = 'EAC_OBJECT_CACHE_'.strtoupper($constant).'_GROUPS';
-		if ( defined( $constant ) ) {
-			$constant = (array) constant($constant);
-			if ( is_array( $constant ) && ! empty ( $constant ) ) {
+		if ($constant = $this->get_defined_option("{$constant}_groups", 'is_array')) {
+			if ( !empty( $constant ) ) {
 				$groups = array_fill_keys( $constant, true );
 			}
 		}
@@ -1422,7 +1503,7 @@ class WP_Object_Cache
 		if (! $this->prefetch_misses) return;
 
 		// load (or re-load) prior cache misses into L1 cache
-		if ($misses = $this->fetch('cache-misses',self::GROUP_ID)) {
+		if ($misses = $this->get_cache('cache-misses',self::GROUP_ID)) {
 			$this->L2_misses[$this->blog_id] = 0;
 			foreach ($misses as $group => $keys) {
 				if (!isset( $this->L1_cache[ $group ] )) $this->L1_cache[ $group ] = [];
@@ -1434,7 +1515,7 @@ class WP_Object_Cache
 		}
 		// remove from L1 cache
 		$blogkey = $this->get_valid_key('cache-misses',self::GROUP_ID);
-		unset( $this->L1_cache[ self::GROUP_ID ][ $blogkey ], $this->L2_cache[ self::GROUP_ID ][ $blogkey ]);
+		unset( $this->L1_cache[ self::GROUP_ID ][ $blogkey ] );
 	}
 
 
@@ -1444,7 +1525,7 @@ class WP_Object_Cache
 	 */
 	private function save_cache_misses(): void
 	{
-		if (! $this->prefetch_misses) return;
+		if (! $this->prefetch_misses || empty($this->L1_cache)) return;
 
 		$misses = array();
 		foreach ($this->L1_cache as $group => $keys) {
@@ -1470,13 +1551,15 @@ class WP_Object_Cache
 	 */
 	public function switch_to_blog( $blog_id )
 	{
-		if ($this->multisite && $this->blog_id != $blog_id) {
-			$this->flush_runtime();
-			$this->blog_id = (int) $blog_id;
-			$this->load_prefetch_groups();
-			$this->load_cache_misses();
-			$this->addStats('blog switches',1);
+		if ($this->is_multisite) {
+			$this->flush_runtime(true);
+			$this->addStats("blog switches",1);
 		}
+		$this->blog_id = (int)$blog_id;
+		$this->load_prefetch_groups();
+		$this->load_cache_misses();
+		$this->wp_transients( 'import', $this->blog_id );
+
 	}
 
 
@@ -1488,7 +1571,6 @@ class WP_Object_Cache
 	 */
 	public function reset()
 	{
-		_deprecated_function( __METHOD__, '3.5.0', 'WP_Object_Cache::switch_to_blog()' );
 		$this->switch_to_blog( get_current_blog_id() );
 	}
 
@@ -1506,54 +1588,93 @@ class WP_Object_Cache
 	{
 		if (! $this->db ) return;
 
-		// find and cache all cache misses - not in sqlite
-		$this->save_cache_misses();
-
-		// count requests (since last flush)
-		$requests = $this->incr('requests',+1,self::GROUP_ID);
+		// count requests (since last close)
+		if ($this->is_actionable()) {
+			$site_requests 		= $this->incr('site-requests',1,self::GROUP_ID);
+			$network_requests 	= ($this->is_multisite)
+				? $this->incr('network-requests',1,self::GROUP_ID_GLOBAL)
+				: $site_requests;
+		}
 
 		// maintenance functions (every n requests)
-		if ($this->gc_probability > 0)
+		if ($this->is_actionable() && $this->gc_probability >= 10)
 		{
+		    $start_time = microtime( true );
 			$this->gc_probability = $this->gc_probability + ($this->gc_probability % 2); // even number
-			$probability = ($requests % $this->gc_probability);
+			$probability = ($network_requests % $this->gc_probability);
 
-			if ($probability == 0)												//	checkpoint db
+			if ($probability == 0)												//	checkpoint/optimize
 			{
-				$this->write_cache();
-				$result = $this->db->query('PRAGMA wal_checkpoint(TRUNCATE);');
-			}
-
-			if ($probability == (int)($this->gc_probability * .75))				// garbage collection
-			{
-				$limit = (is_int($this->delayed_writes) ? $this->delayed_writes : 32);
+				$limit = ((int)$this->delayed_writes >= 10) ? $this->delayed_writes : 32;
+				$stmt = $this->db->prepare(
+					"DELETE FROM wp_cache WHERE expire > 0 AND expire < {$this->time_now} LIMIT {$limit};"
+				);
 				try {
 					$this->db->beginTransaction();
-					$result = $this->db->query(
-						"DELETE FROM wp_cache WHERE expire > 0 AND expire < {$this->time_now} LIMIT {$limit};"
-					);
+					$stmt->execute();
 					$this->db->commit();
+					if ($stmt->rowCount() > 0) {
+						$this->db->exec("
+							PRAGMA incremental_vacuum;
+							PRAGMA optimize;
+						");
+					}
+					$message = sprintf("garbage collection deleted %d rows (%01.4f)", $stmt->rowCount(), microtime( true ) - $start_time);
+					$this->error_log(__CLASS__,$message);
 				} catch ( Exception $ex ) {
-					$this->error_log(__METHOD__,$ex);
 					$this->db->rollBack();
+					$this->error_log(__METHOD__,$ex);
 				}
-			}
-
-			if ($probability == (int)($this->gc_probability * .50))				// optimize db
-			{
-				$result = $this->db->query('PRAGMA optimize;');
-			}
-
-
-			if ($probability == (int)($this->gc_probability * .25))				// stats sample
-			{
-				$this->set('sample', $this->getStats(true), self::GROUP_ID, 0);
 			}
 		}
 
+		if ($this->is_actionable() && $this->display_stats)
+		{
+			$probability = ($site_requests % $this->display_stats);
+
+			if ($probability == 0)												// sampling
+			{
+				$this->set('sample', $this->getStats(), self::GROUP_ID, 0);
+			//	$message = sprintf("request (%d/%d) sampling (%01.4f)",
+			//		$site_requests,$this->display_stats, microtime( true ) - $start_time
+			//	);
+			//	$this->error_log(__CLASS__,$message);
+			}
+		}
+
+		// write the cached records
 		$this->write_cache();
 
 		$this->db = null;
+	}
+
+
+	/**
+	 * is a PHP request (not ajax, not image, etc.)
+	 *
+	 */
+	private function is_actionable()
+	{
+		static $is_actionable = null;
+
+		if (is_null($is_actionable))
+		{
+			$is_actionable = true;
+
+			if (wp_doing_ajax() || wp_doing_cron() ||
+				(isset($_SERVER["HTTP_X_REQUESTED_WITH"]) &&
+				 $_SERVER["HTTP_X_REQUESTED_WITH"] == "XMLHttpRequest"))
+			{
+				$is_actionable = false;
+			}
+			else if (isset($_SERVER["REQUEST_URI"]))
+			{
+				$ext = explode('?',$_SERVER['REQUEST_URI']);
+				$ext = pathinfo(trim($ext[0],'/'),PATHINFO_EXTENSION);
+				if (!empty($ext) && $ext != 'php') $is_actionable = false;
+			}
+		}
+		return $is_actionable;
 	}
 
 
@@ -1582,6 +1703,237 @@ class WP_Object_Cache
 
 
 	/**
+	 * write the persistent cache to disk when db cache is full
+	 *
+	 */
+	private function maybe_write_cache(): bool
+	{
+		switch ( (int)$this->delayed_writes ) {
+			case 0:		// not delayed
+				return $this->write_cache();
+			case 1:		// unlimited
+				return false;
+			default:
+				$pending = $this->pending_writes();
+				return ($pending >= (int)$this->delayed_writes)
+					? (bool)$this->write_cache()
+					: false;
+		}
+	}
+
+
+	/**
+	 * get the number of records waiting to be updated or deleted
+	 *
+	 */
+	private function pending_writes(): int
+	{
+		return count($this->L2_cache,COUNT_RECURSIVE) - count($this->L2_cache);
+	}
+
+
+	/**
+	 * write the persistent cache to disk
+	 *
+	 */
+	private function write_cache(): bool
+	{
+		// find and cache all cache misses - not in sqlite db
+		$this->save_cache_misses();
+
+		if (! $this->db || empty($this->L2_cache)) {
+			return false;
+		}
+
+		$pending = $this->pending_writes();
+		if ((int)$this->delayed_writes > 0 && $pending > 0) {
+			do_action( 'qm/start', __METHOD__." [{$pending}]" );
+		}
+
+		$write = $delete = array();
+
+		// find all writes and deletes
+		foreach ($this->L2_cache as $group => $updates) {
+			foreach ($updates as $blogkey => $expire) {
+				if ($expire !== false) {
+					$write[] = array(
+							$group.'|'.$blogkey,
+							maybe_serialize($this->L1_cache[ $group ][ $blogkey ][ 'value' ] ?? null),
+							( ($expire) ? $this->time_now+$expire : 0 )
+					);
+				} else {
+					$delete[] = $group.'|'.$blogkey;
+				}
+			}
+		}
+
+		$this->L2_cache = array();
+
+		// replace records
+		if (!empty($write)) {
+			$stmt = $this->db->prepare(
+				"INSERT INTO wp_cache (key, value, expire)" .
+				" VALUES ".rtrim(str_repeat("(?,?,?),", count($write)),',') .
+				" ON CONFLICT (key) DO UPDATE".
+				" SET value = excluded.value, expire = excluded.expire;"
+			);
+			$retries = 0;
+			while ( ++$retries <= $this->max_retries ) {
+				try {
+					$this->db->beginTransaction();
+					$stmt->execute(array_merge(...$write));
+					$this->addStats('L2 updates',$stmt->rowCount());
+					$this->db->commit();
+					$this->addStats('L2 commits',1);
+					break;
+				} catch ( Exception $ex ) {
+					$this->db->rollBack();
+					$this->error_log(__METHOD__,$ex);
+					usleep($this->sleep_time);
+				}
+			}
+		}
+
+		// delete records
+		if (!empty($delete)) {
+			$stmt = $this->db->prepare(
+				"DELETE FROM wp_cache".
+				" WHERE key in (".rtrim(str_repeat("?,", count($delete)),',').")"
+			);
+			$retries = 0;
+			while ( ++$retries <= $this->max_retries ) {
+				try {
+					$this->db->beginTransaction();
+					$stmt->execute($delete);
+					$this->addStats('L2 deletes',$stmt->rowCount());
+					$this->db->commit();
+					$this->addStats('L2 commits',1);
+					break;
+				} catch ( Exception $ex ) {
+					$this->db->rollBack();
+					$this->error_log(__METHOD__,$ex);
+					usleep($this->sleep_time);
+				}
+			}
+		}
+
+		if ((int)$this->delayed_writes > 0 && $pending > 0) {
+			do_action( 'qm/stop', __METHOD__." [{$pending}]" );
+		}
+		return true;
+	}
+
+
+	/**
+	 * Delete the L2 cache file(s).
+	 * Since we load early, WP_Filesystem is probably not available
+	 *
+	 */
+	public function delete_cache_file(): void
+	{
+		$this->db = null;
+
+		$cacheName = trailingslashit($this->cache_folder) . $this->cache_file;
+		foreach ( [ '', '-journal', '-shm', '-wal' ] as $ext ) {
+			if (file_exists($cacheName.$ext)) {
+				unlink($cacheName.$ext);
+			}
+		}
+		$this->error_log(__CLASS__,"L2 cache deleted");
+	}
+
+
+	/**
+	 * Callable function to vacuum/optimize database.
+	 * scedule with delete_expired_transients
+	 *
+	 */
+	public function optimize(): void
+	{
+		if (! $this->db ) return;
+
+		$start_time = microtime( true );
+		$retries = 0;
+		while ( ++$retries <= $this->max_retries ) {
+			try {
+				$this->db->beginTransaction();
+				$count = $this->db->exec("
+					DELETE FROM wp_cache WHERE expire > 0 AND expire < {$this->time_now};
+				");
+				$this->db->commit();
+				// cannot VACUUM from within a transaction
+				$this->db->exec("
+					PRAGMA auto_vacuum = INCREMENTAL;
+					VACUUM;
+					PRAGMA optimize;
+				");
+				$message = sprintf("cache optimization deleted %d rows before vacuum/optimize (%01.4f)", $count, microtime( true ) - $start_time);
+				$this->error_log(__CLASS__,$message);
+				break;
+			} catch ( Exception $ex ) {
+				$this->db->rollback();
+				$this->error_log(__METHOD__,$ex);
+				usleep($this->sleep_time);
+			}
+		}
+	}
+
+
+	/**
+	 * Error logging.
+	 *
+	 * Writes and/or displays error message.
+	 *
+	 * @param string $source (function)
+	 * @param string|object $message message string or exception object
+	 * @param string $class error level (notice|error)
+	 */
+	protected function error_log($source,$message,$class='notice'): void
+	{
+		$trace 		= '';
+
+		if (is_object($message)) {
+			if (is_wp_error($message)) {
+				$message = $message->get_error_code().' '.$message->get_error_message();
+			} else {
+				$message = $message->getCode().' '.$message->getMessage();
+			}
+			$class 	= 'error';
+			ob_start();
+			debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+			$trace 	= PHP_EOL . ob_get_clean();
+		}
+
+		$class 		= esc_attr($class);
+		$message 	= esc_attr($message);
+		$siteId 	= ($this->is_multisite) ? " [site {$this->blog_id}]" : "";
+		$source		= esc_attr($source.$siteId);
+
+		if ($this->display_errors && is_admin() && function_exists('is_admin_bar_showing') && is_admin_bar_showing()) {
+			echo "<div class='object-cache-{$class} notice notice-{$class}'>".
+				 "<p>WP Object Cache{$siteId}: {$message}</p></div>\n";
+		}
+
+		$message = $source.': '.$message.$trace;
+
+		if ($this->log_errors) {
+			do_action( "qm/{$class}", $message );
+			do_action( "eacDoojigger_log_{$class}",$message,__CLASS__ );
+		}
+
+		$class = "E_USER_".strtoupper($class);
+		if (defined($class) && (constant($class) & error_reporting())) {
+			\error_log($message);
+		}
+	}
+
+
+	/*
+	 * API methods  - counts/stats
+	 */
+
+
+	/**
 	 * Update counters
 	 *
 	 * @param string $countId the counter to update
@@ -1606,174 +1958,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * write the persistent cache to disk when db cache is full
-	 *
-	 */
-	private function maybe_write_cache(): bool
-	{
-		if ( $this->delayed_writes !== true ) {
-			$pending = count($this->L2_cache,COUNT_RECURSIVE) - count($this->L2_cache);
-			if ($pending >= (int)$this->delayed_writes ) {
-				return $this->write_cache();
-			}
-		}
-		return false;
-	}
-
-
-	/**
-	 * write the persistent cache to disk
-	 *
-	 */
-	private function write_cache(): bool
-	{
-		if (! $this->db || empty($this->L2_cache)) {
-			$this->L2_cache = array();
-			return false;
-		}
-
-		$write = $delete = array();
-
-		// find all writes and deletes
-		foreach ($this->L2_cache as $group => $updates) {
-			foreach ($updates as $blogkey => $expire) {
-				if ($expire !== false) {
-					$write[] = array(
-							'key'		=> $group.'|'.$blogkey,
-							'value'		=> maybe_serialize($this->L1_cache[ $group ][ $blogkey ][ 'value' ]),
-							'expire'	=> ( ($expire) ? $this->time_now+$expire : 0 )
-					);
-				} else {
-					$delete[] = $group.'|'.$blogkey;
-				}
-			}
-		}
-
-		$this->L2_cache = array();
-
-		$count = 0;
-		// replace records
-		if (!empty($write)) {
-			$retries = 0;
-			while ( ++$retries <= $this->max_retries ) {
-				try {
-				//	$stmt = $this->db->prepare(
-				//		"REPLACE INTO wp_cache (key, value, expire) VALUES " .
-				//		rtrim(str_repeat("(?,?,?),", count($write)),',')
-				//	);
-					$stmt = $this->db->prepare(
-						"INSERT INTO wp_cache (key, value, expire) VALUES (:key, :value, :expire) " .
-						"ON CONFLICT (key) DO UPDATE SET key = :key, value = :value, expire = :expire;"
-					);
-					$this->db->beginTransaction();
-				//	$stmt->execute(array_merge(...$write));
-					foreach ($write as $rec) {
-						$stmt->execute($rec);
-						$count += $stmt->rowCount();
-						$this->addStats('L2 updated',$stmt->rowCount());
-					}
-					$this->db->commit();
-					$this->addStats('L2 commits',1);
-					break;
-				} catch ( Exception $ex ) {
-					$this->error_log(__METHOD__,$ex);
-					$this->db->rollBack();
-					usleep($this->sleep_time);
-				}
-			}
-		}
-
-		// delete records
-		if (!empty($delete)) {
-			$retries = 0;
-			while ( ++$retries <= $this->max_retries ) {
-				try {
-					$stmt = $this->db->prepare(
-						"DELETE FROM wp_cache WHERE key in (" .
-						rtrim(str_repeat("?,", count($delete)),',').")"
-					);
-					$this->db->beginTransaction();
-					$stmt->execute($delete);
-					$count += $stmt->rowCount();
-					$this->addStats('L2 deleted',$stmt->rowCount());
-					$this->db->commit();
-					$this->addStats('L2 commits',1);
-					break;
-				} catch ( Exception $ex ) {
-					$this->error_log(__METHOD__,$ex);
-					$this->db->rollBack();
-					usleep($this->sleep_time);
-				}
-			}
-		}
-
-		return (bool)$count;
-	}
-
-
-	/**
-	 * Delete the L2 cache file(s).
-	 * Since we load early, WP_Filesystem is probably not available
-	 *
-	 */
-	public function delete_cache_file(): void
-	{
-		$this->db = null;
-
-		$cacheName = trailingslashit($this->cache_folder) . $this->cache_file;
-		foreach ( [ '', '-journal', '-shm', '-wal' ] as $ext ) {
-			if (file_exists($cacheName.$ext)) {
-				unlink($cacheName.$ext);
-			}
-		}
-		$this->error_log(__METHOD__,"L2 cache deleted");
-	}
-
-
-	/**
-	 * Error logging.
-	 *
-	 * Writes and/or displays error message.
-	 *
-	 * @param string $source (function)
-	 * @param string|object $message message string or exception object
-	 */
-	private function error_log($source,$message): void
-	{
-		try {
-			$class = 'warning';
-			$trace = '';
-
-			if (is_object($message)) {
-				$class = 'error';
-				$message = $message->getCode().' '.$message->getMessage();
-				ob_start();
-				debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
-				$trace = PHP_EOL . ob_get_clean();
-			}
-
-			if ($this->display_errors && is_admin() && function_exists('is_admin_bar_showing') && is_admin_bar_showing()) {
-				echo "<div class='object-cache-".esc_attr($class)." notice notice-".esc_attr($class)."'>".
-					 "<p>WP Object Cache: ".esc_attr($message)."</p></div>\n";
-			}
-
-			$message = $source.' : '.$message.$trace;
-			error_log($message);
-
-			if ($this->log_errors && function_exists('eacDoojigger')) {
-				eacDoojigger()->logError($message,self::PLUGIN_NAME);
-			}
-		} catch (Throwable $e) {}
-	}
-
-
-	/*
-	 * API methods  - counts/stats
-	 */
-
-
-	/**
-	 * Echoes the stats of the caching (similar to WP_Object_Cache::stats()).
+	 * Echoes the stats of the caching (similar to WP default cache).
 	 * Called by outside actors (e.g. debug bar)
 	 *
 	 * Gives the cache hits, and cache misses. Also prints every cached group,
@@ -1781,9 +1966,9 @@ class WP_Object_Cache
 	 */
 	public function stats(): void
 	{
-		$stats = $this->getStats(false);
+		$stats = $this->getStats();
 
-		echo "</p>";
+		echo "<p>";
 		echo "<strong>Cache Hits:</strong> ".number_format($this->cache_stats['cache hits'],0)."<br />";
 		echo "<strong>Cache Misses:</strong> ".number_format($this->cache_stats['cache misses'])."<br />";
 		echo "<strong>Cache Ratio:</strong> ".
@@ -1819,12 +2004,11 @@ class WP_Object_Cache
 	 * Gives the cache hits, and cache misses. Also prints every cached group,
 	 * key and the data.
 	 *
-	 * @param bool $last use last sampling
-	 * @param bool $full flush cache and get database stats
+	 * @param bool $useSample use last sampling
 	 */
-	public function htmlStats($last = false, $full = true): void
+	public function htmlStats($useSample = false): void
 	{
-		$stats = ($last) ? $this->getLastSample() : $this->getStats($full);
+		$stats = ($useSample) ? $this->getLastSample() : $this->getStats();
 
 		echo "\n<div class='wp-object-cache'>";
 
@@ -1884,13 +2068,16 @@ class WP_Object_Cache
 	 * Gives the cache hits, and cache misses. Also prints every cached group,
 	 * key and the data.
 	 *
-	 * @param bool $full flush cache and get database stats
 	 * @return array
 	 */
-	public function getStats($full=true): array
+	public function getStats(): array
 	{
-		// so outside actors don't force a cache write
-		if ($full) $this->write_cache();
+		static $stats = [];
+		if (!empty($stats)) return $stats;
+
+		do_action( 'qm/start', __METHOD__ );
+
+		$this->write_cache();
 
 		$stats = array();
 		$stats['id'] = array(
@@ -1898,67 +2085,137 @@ class WP_Object_Cache
 			'cache file'		=> ($this->db)
 					? '~/'.trailingslashit(basename($this->cache_folder)) . $this->cache_file
 					: 'memory-only',
-			'peak memory used'	=> round((memory_get_peak_usage(false) / 1024) / 1024).'M of '.ini_get('memory_limit'),
+			'peak memory used'	=> round((memory_get_peak_usage(false) / MB_IN_BYTES)).'M of '.ini_get('memory_limit'),
 			'sample time'		=> wp_date('c'),
 		);
 		if (isset($_SERVER['REQUEST_URI'])) {
 			$stats['id']['sample uri']	= sanitize_url( $_SERVER['REQUEST_URI'] );
 		}
 
-		$this->cache_stats["L2 pre-fetched (-)"] = array_sum($this->L2_misses);
+		// addStats() counters
+		$stats['cache'] 				= $this->getStatsCache();
 
-		// addStats counters
-		$stats['cache'] = array();
-		foreach ($this->cache_stats as $name => $count) {
-			$stats['cache'][$name] = [$count,''];
-		}
-		// add cache hit ratios
-		$stats['cache']['cache hits'][1] =
-			$this->cache_hit_ratio($this->cache_stats['cache hits'],$this->cache_stats['cache misses']);
-		$stats['cache']['L1 cache hits'][1] =
-			$this->cache_hit_ratio($this->cache_stats['L1 cache hits'],$this->cache_stats['L1 cache misses']);
-		$stats['cache']['L2 cache hits'][1] =
-			$this->cache_hit_ratio($this->cache_stats['L2 cache hits'],$this->cache_stats['L2 cache misses']);
-
-		// current cache contents
-		$stats['cache-groups'] = array();
-		foreach ( $this->L1_cache as $group => $cache ) {
-			$cache = array_filter($cache, function($v){return $v !== false;});
-			if (!empty($cache)) {
-				$count = count($cache);
-				$size = strlen( serialize( $cache ) );
-				$stats['cache-groups'][$group] = [$count, $size, $this->group_stats[$group] ?? 0];
-			}
-		}
-		ksort($stats['cache-groups']);
-		$stats['cache-groups']['Total'] = [
-			array_sum(array_column($stats['cache-groups'],0)),
-			array_sum(array_column($stats['cache-groups'],1)),
-			array_sum(array_column($stats['cache-groups'],2))
-		];
+		// current cache contents by group
+		$stats['cache-groups'] 			= $this->getStatsGroups();
 
 		// database contents - all groups
-		if ($full && $this->db) {
-			$blog_id = sprintf("%05d", $this->blog_id);
-			$stats['database-groups'] = array();
-			if ($result = $this->db->query("
-				SELECT SUBSTR(key,0,INSTR(key,'|')) as name,
-					   SUBSTR(key,INSTR(key,'|')+1,5) as blog,
-					   COUNT(*) as count,
-					   SUM(LENGTH(key)+2 + LENGTH(value)+4 + 8+2) as size
-				FROM wp_cache WHERE blog IN ('00000','{$blog_id}')
-				 AND (expire = 0 OR expire >= {$this->time_now}) GROUP BY name;"))
-			{
-				while ($row = $result->fetch()) {
-					$stats['database-groups'][ $row['name'] ] = [$row['count'], $row['size']];
+		if ($this->db) {
+			$stats['database-groups'] 	= $this->getStatsDB();
+		}
+
+		do_action( 'qm/stop', __METHOD__ );
+		return $stats;
+	}
+
+
+	/**
+	 * Returns the current cache stats..
+	 *
+	 * @param bool $log add Query Monitor/eacDoojigger logging
+	 * @return array
+	 */
+	public function getStatsCache($log=false): array
+	{
+		$stats = array();
+
+		$this->cache_stats["L2 pre-fetched (-)"] = array_sum($this->L2_misses);
+
+		foreach ($this->cache_stats as $name => $count) {
+			$stats[$name] = [$count,''];
+		}
+		// add cache hit ratios
+		$stats['cache hits'][1] =
+			$this->cache_hit_ratio($this->cache_stats['cache hits'],$this->cache_stats['cache misses']);
+		$stats['L1 cache hits'][1] =
+			$this->cache_hit_ratio($this->cache_stats['L1 cache hits'],$this->cache_stats['L1 cache misses']);
+		$stats['L2 cache hits'][1] =
+			$this->cache_hit_ratio($this->cache_stats['L2 cache hits'],$this->cache_stats['L2 cache misses']);
+
+		if ($log) {
+			$qmlog =  __CLASS__." on ".current_action()."\n";
+			foreach ($stats as $group => $cache) {
+				if ($cache && $cache[0]) {
+					$qmlog .= "\t" . esc_attr( $group ) . ': ' . number_format( $cache[0], 0 ) . "\n";
 				}
-				$result->closeCursor();
-				ksort($stats['database-groups']);
-				$stats['database-groups']['Total'] = [
-					array_sum(array_column($stats['database-groups'],0)),
-					array_sum(array_column($stats['database-groups'],1))
-				];
 			}
+			do_action( 'qm/info', $qmlog );
+			$qmlog = 'cache hits: ' . number_format( $stats['cache hits'][0], 0).', ' .
+					 '(L1: ' 		. number_format( $stats['L1 cache hits'][0], 0).', ' .
+					 'L2: ' 		. number_format( $stats['L2 cache hits'][0], 0).'), ' .
+					 'misses: ' 	. number_format( $stats['cache misses'][0], 0).', ' .
+					 'ratio: ' 		. $stats['cache hits'][1];
+			do_action("eacDoojigger_log_notice",$qmlog,__CLASS__);
+		}
+
+		return $stats;
+	}
+
+
+	/**
+	 * Returns the current cache stats..
+	 *
+	 * @return array
+	 */
+	public function getStatsGroups(): array
+	{
+		$stats = array();
+
+		foreach ( $this->L1_cache as $group => $cache ) {
+			$cache = array_filter($cache, function($v){return $v !== false;});
+			$stat = $this->group_stats[$group] ?? 0;
+			if (!empty($cache) && $stat > 0) {
+				$count = count($cache);
+				$size = 0;
+				foreach ($cache as $k => $v) {
+					$size += (strlen($k)+strlen(maybe_serialize($v)));
+				}
+				$stats[$group] = [$count, $size, $stat];
+			}
+		}
+		ksort($stats);
+		$stats['Total'] = [
+			array_sum(array_column($stats,0)),
+			array_sum(array_column($stats,1)),
+			array_sum(array_column($stats,2))
+		];
+
+		return $stats;
+	}
+
+
+	/**
+	 * Returns the stats of the L2 database.
+	 *
+	 * @return array
+	 */
+	public function getStatsDB(): array
+	{
+		if (!$this->db) return ['Total'=>[0,0,0]];
+
+		$stats = array();
+
+		$blog_id = sprintf("%05d", $this->blog_id);
+		if ($result = $this->db->query("
+			SELECT SUBSTR(key,0,INSTR(key,'|')) as name,
+				   SUBSTR(key,INSTR(key,'|')+1,5) as blog,
+				   COUNT(*) as count,
+				   SUM(LENGTH(key)*2 + LENGTH(value) + LENGTH(expire)*2) as size
+			FROM wp_cache
+			 WHERE (expire = 0 OR expire >= {$this->time_now})
+			  AND (key LIKE '%|00000|%' or key LIKE '%|{$blog_id}|%')
+			 GROUP BY name;"))
+		{
+			while ($row = $result->fetch()) {
+				$stats[ $row['name'] ] = [$row['count'], $row['size']];
+			}
+			$result->closeCursor();
+			ksort($stats);
+			$cacheName	= trailingslashit($this->cache_folder) . $this->cache_file;
+			$stats['Total'] = [
+				array_sum(array_column($stats,0)),
+				array_sum(array_column($stats,1)),
+				filesize($cacheName),
+			];
 		}
 
 		return $stats;
@@ -1986,10 +2243,10 @@ class WP_Object_Cache
 	 */
 	public function getLastSample(): array
 	{
-		if ( $row = $this->fetch( "sample", self::GROUP_ID ) ) {
+		if ( $row = $this->get_cache( "sample", self::GROUP_ID ) ) {
 			return $row;
 		}
-		return $this->getStats(true);
+		return $this->getStats();
 	}
 
 
@@ -2001,29 +2258,31 @@ class WP_Object_Cache
 	/**
 	 * install (from connect for new db file)
 	 *
+	 * @param string $cacheName path to sqlite file
 	 */
-	public function install(): bool
+	public function install(string $cacheName): bool
 	{
-		try {
-			$this->db->exec(
-				"CREATE TABLE IF NOT EXISTS wp_cache (".
-				" key TEXT NOT NULL COLLATE BINARY PRIMARY KEY, value BLOB, expire INT".
-				") WITHOUT ROWID;".
-				"CREATE INDEX IF NOT EXISTS expire ON wp_cache (expire);"
-			);
-		} catch ( Exception $ex ) {
-			$this->error_log(__METHOD__,$ex);
-			$this->db = null;
-			return false;
+		chmod($cacheName,FS_CHMOD_FILE|0640);
+
+		$retries = 0;
+		while ( ++$retries <= $this->max_retries ) {
+			try {
+				$this->db->exec(
+					"CREATE TABLE IF NOT EXISTS wp_cache (".
+					"key TEXT NOT NULL COLLATE BINARY PRIMARY KEY, value BLOB, expire INT".
+					") WITHOUT ROWID;".
+					"CREATE INDEX IF NOT EXISTS expire ON wp_cache (expire);"
+				);
+				break;
+			} catch ( Exception $ex ) {
+				$this->error_log(__METHOD__,$ex);
+				usleep($this->sleep_time);
+			}
 		}
 
-		// can't do this too early, but early enough
-		add_action('muplugins_loaded',function()
-			{
-				$this->error_log('WP_Object_Cache::install',$this->import_wp_transients()." transients imported");
-			}
-		);
-		$this->error_log(__METHOD__,self::PLUGIN_NAME." Installed");
+		// don't use $this->error_log before instantiated
+		$message = __CLASS__.' : '.self::PLUGIN_NAME." Installed";
+		\error_log($message);
 		return true;
 	}
 
@@ -2032,12 +2291,12 @@ class WP_Object_Cache
 	 * uninstall (from external extension)
 	 *
 	 */
-	public function uninstall(): bool
+	public function uninstall(bool $complete = true): bool
 	{
-		$this->error_log('WP_Object_Cache::uninstall',$this->export_wp_transients()." transients exported");
-		wp_using_ext_object_cache( true );
-		$this->delete_cache_file();
-		$this->error_log(__METHOD__,self::PLUGIN_NAME." Uninstalled");
+		$this->wp_transients( 'export', $this->blog_id );
+		wp_using_ext_object_cache( false );
+		if ($complete) $this->delete_cache_file();
+		$this->error_log(__CLASS__,self::PLUGIN_NAME." Uninstalled");
 		return true;
 	}
 
@@ -2048,6 +2307,30 @@ class WP_Object_Cache
 
 
 	/**
+	 * import/export WP MySQL transients
+	 *
+	 */
+	private function wp_transients(string $action, int $blog_id): int
+	{
+		switch ($action) {
+			case 'import':
+				if ($count = $this->import_wp_transients()) {
+					$this->cache_stats['transients imported'] = 0;
+					$this->error_log(__CLASS__,sprintf("%d transients imported",$count));
+				}
+				return $count;
+			case 'export':
+				if ($count = $this->export_wp_transients()) {
+					$this->cache_stats['transients exported'] = 0;
+					$this->error_log(__CLASS__,sprintf("%d transients exported",$count));
+				}
+				return $count;
+		}
+		return 0;
+	}
+
+
+	/**
 	 * import existing MySQL transients
 	 *
 	 */
@@ -2055,8 +2338,11 @@ class WP_Object_Cache
 	{
 		global $wpdb;
 
+		// do we have db connections
+		if (! $this->db || ! $wpdb) return 0;
+
 		// see if we've done this already
-		if ( $row = $this->fetch( 'transients', self::GROUP_ID ) ) {
+		if ( $this->get_cache( 'imported-transients', self::GROUP_ID ) ) {
 			return 0;
 		}
 
@@ -2071,7 +2357,7 @@ class WP_Object_Cache
 
 		$optionSQL =
 			"SELECT option_name as name, option_value as value".
-			"  FROM {$wpdb->options} WHERE option_name LIKE %s AND option_name NOT LIKE %s";
+			" FROM {$wpdb->options} WHERE option_name LIKE %s AND option_name NOT LIKE %s";
 
 		$transients = $wpdb->get_results(
 			$wpdb->prepare($optionSQL,'_transient_%','_transient_timeout_%')
@@ -2085,7 +2371,7 @@ class WP_Object_Cache
 
 		// import site transients from options or sitemeta table
 
-		$siteSQL = ($this->multisite)
+		$siteSQL = ($this->is_multisite)
 			? "SELECT meta_key as name, meta_value as value".
 			  " FROM {$wpdb->sitemeta} WHERE meta_key LIKE %s AND meta_key NOT LIKE %s"
 			: $optionSQL;
@@ -2103,7 +2389,7 @@ class WP_Object_Cache
 		wp_using_ext_object_cache( true );
 		wp_installing( $installing );
 
-		$this->set('transients', [ wp_date('c'),$this->cache_stats['transients imported'] ], self::GROUP_ID, 0);
+		$this->set('imported-transients', [ wp_date('c'),$this->cache_stats['transients imported'] ], self::GROUP_ID, 0);
 		$this->set_delayed_writes();
 
 		return $this->cache_stats['transients imported'];
@@ -2144,11 +2430,11 @@ class WP_Object_Cache
 	 */
 	private function export_wp_transients(): int
 	{
+		if (! $this->db) return 0;
 		$this->write_cache();
 
 		// so we don't try to use this cache
 		wp_using_ext_object_cache( false );
-		$installing = wp_installing( true );
 
 		$blogkeys = [
 			'transient' 		=> [$this->get_valid_key('%','transient')],
@@ -2160,7 +2446,6 @@ class WP_Object_Cache
 		}
 
 		wp_using_ext_object_cache( true );
-		wp_installing( $installing );
 
 		return $this->cache_stats['transients exported'] ?? 0;
 	}
@@ -2190,5 +2475,4 @@ class WP_Object_Cache
  * global wp functions (wp-include/cache.php)
  * WP_PLUGIN_DIR not yet set
  */
-
 require __DIR__.'/plugins/eacobjectcache/src/wp-cache.php';

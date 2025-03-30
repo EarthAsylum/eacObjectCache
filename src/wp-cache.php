@@ -1,11 +1,16 @@
 <?php
 /**
- * Object Cache API
- *
- * @link https://developer.wordpress.org/reference/classes/wp_object_cache/
+ * Object Cache API.
+ * {eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in.
  *
  * @package WordPress
  * @subpackage Cache
+ *
+ * @link https://developer.wordpress.org/reference/classes/wp_object_cache/
+ *
+ * @author Kevin Burkholder <KBurkholder@EarthAsylum.com>
+ * @link https://eacdoojigger.earthasylum.com/eacobjectcache/
+ *
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -19,7 +24,13 @@ defined( 'EAC_OBJECT_CACHE_VERSION' ) || exit;
  * @global WP_Object_Cache $wp_object_cache
  */
 function wp_cache_init() {
-	$GLOBALS['wp_object_cache'] = new WP_Object_Cache();
+	global $wp_object_cache;
+
+	if (!isset($wp_object_cache) || !is_a($wp_object_cache,'\WP_Object_Cache')) {
+		$wp_object_cache = new \WP_Object_Cache();
+		// because we may pull transients, which uses wp-cache, we must be instantiated
+		$wp_object_cache->init();
+	}
 }
 
 /**

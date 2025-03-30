@@ -1,8 +1,8 @@
 === {eac}Doojigger ObjectCache - SQLite powered WP_Object_Cache Drop-in. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.1.0
-Last Updated:       13-Mar-2025
+Stable tag:         1.2.0
+Last Updated:       20-Mar-2025
 Requires at least:  5.8
 Tested up to:       6.7
 Requires PHP:       7.4
@@ -55,6 +55,7 @@ SQLite is a fast, small, single-file relational database engine. By using SQLite
 +   Easily enabled or disabled from administrator page.
     +   Imports existing transients when enabled.
     +   Exports cached transients when disabled.
++   Automatically cleans and optimizes SQLite database.
 +   Uses the PHP Data Objects (PDO) extension included with PHP.
 
 
@@ -181,13 +182,13 @@ Pre-fetching cache misses (keys that are not in the L2 persistent cache) prevent
 
 * * *
 
-+   To set maintenance/sampling probability                     (default: 100):
++   To set maintenance probability                              (default: 1000):
 
 ```
     define( 'EAC_OBJECT_CACHE_PROBABILITY', int );
 ```
 
-Sets the probability of running maintenance & sampling tasks (approximately 1 in n requests).
+Sets the probability of running maintenance tasks (approximately 1 in n requests, n>=10).
 
 * * *
 
@@ -234,6 +235,18 @@ When setting a default expiration (`EAC_OBJECT_CACHE_DEFAULT_EXPIRE`) for object
 
 Pre-fetching a group of records may be much faster than loading each key individually, but may load keys that are not needed, using memory unnecessarily.
 
+* * *
+
++   To prevent outside actors (scripts, plugins, etc.), including WordPress, from flushing caches.
+
+```
+    define( 'EAC_OBJECT_CACHE_DISABLE_FLUSH', true );
+    define( 'EAC_OBJECT_CACHE_DISABLE_FULL_FLUSH', true );
+    define( 'EAC_OBJECT_CACHE_DISABLE_GROUP_FLUSH', true );
+    define( 'EAC_OBJECT_CACHE_DISABLE_BLOG_FLUSH', true );
+    define( 'EAC_OBJECT_CACHE_DISABLE_RUNTIME_FLUSH', true );
+```
+
 = Utility methods =
 
 +   Outputs an html table of current stats. Use `$wp_object_cache->statsCSS` to style.
@@ -271,10 +284,10 @@ Pre-fetching a group of records may be much faster than loading each key individ
 +   Outputs an administrator notice using htmlStats().
 
 ```
-    $wp_object_cache->display_stats = true | 'current' | 'sample';
+    $wp_object_cache->display_stats = n;
 ```
 
-+   Outputs an administrator notice on error.
++   Outputs an administrator notice on error (n = sample ever n requests).
 
 ```
     $wp_object_cache->display_errors = true;
@@ -412,7 +425,6 @@ Once installed and activated options for this extension will show in the 'Object
 ![{eac}ObjectCache Stats](https://ps.w.org/eacobjectcache/assets/screenshot-3.png)
 
 
-
 == Other Notes ==
 
 = Additional Information =
@@ -432,6 +444,26 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 1.2.0 - March 20, 2025 =
+
++   Optimize `insert... on conflict` statement.
++   Use `exec()` instead of `query()` where applicable.
++   Optimize stats sample select SQL.
++   Rework count/size in cache stats.
++   Don't wait for mu_plugins to load prefetch groups.
++   Added `optimize()` method with scheduled event (daily @1am).
+    +   Purge expired records before vacuum.
++   Added `incremental_vacuum` on maintenance probability.
++   Allow defined constants to prevent outside actors from flushing caches.
++   Reworked option constants load.
++   Support Query Monitor logging and timings.
++   Prevent maintenance on ajax/cron/not-php requests.
++   New `init()` to allow instantiation before triggering use.
++   New `getStatsCache()`, `getStatsGroups()`, `getStatsDB()` used by `getStats()`.
++   Sampling/maintenance probability per blog/global.
++   `display_stats` is numeric indicating every n requests to sample.
++   Isolated admin extension for backend only.
 
 = Version 1.1.0 - March 13, 2025 =
 
