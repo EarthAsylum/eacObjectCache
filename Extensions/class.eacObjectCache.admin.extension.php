@@ -436,7 +436,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					break;
 				case '_probability':
 					if ($value == $wp_object_cache->gc_probability) return $value; 	// no change
-					$value = (is_numeric($value)) ? (int)($value + ($value % 2)) : 100;
+					$value = (is_numeric($value)) ? (int)$value : 100;
 					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_PROBABILITY', "{$value}", ['raw'=>true] );
 					break;
 				case '_nonp_groups':

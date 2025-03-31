@@ -1,10 +1,10 @@
 === {eac}Doojigger ObjectCache - SQLite powered WP_Object_Cache Drop-in. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.2.0
-Last Updated:       20-Mar-2025
+Stable tag:         1.2.1
+Last Updated:       30-Mar-2025
 Requires at least:  5.8
-Tested up to:       6.7
+Tested up to:       6.8
 Requires PHP:       7.4
 Requires EAC:       3.0
 Contributors:       kevinburkholder
@@ -444,6 +444,11 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 1.2.1 - March 30, 2025 =
+
++   Use `add_event_task` filter to add optimize scheduled task.
++   Fix probability error when set to 25.
 
 = Version 1.2.0 - March 20, 2025 =
 

@@ -18,7 +18,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '25.0320.1';
+		const VERSION	= '25.0330.1';
 
 		/**
 		 * @var string to set default tab name
@@ -82,7 +82,8 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 			{
 				if (get_current_blog_id() == get_main_site_id()) {
 					global $wp_object_cache;
-					$this->add_action( 'daily_event', array($wp_object_cache, 'optimize') );
+				//	$this->add_action( 'daily_event', array($wp_object_cache, 'optimize') );
+					$this->do_action( 'add_event_task', 'daily', array($wp_object_cache, 'optimize'));
 				}
 			}
 		}
