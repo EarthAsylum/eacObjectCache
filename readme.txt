@@ -1,8 +1,8 @@
 === {eac}Doojigger ObjectCache - SQLite powered WP_Object_Cache Drop-in. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.2.1
-Last Updated:       30-Mar-2025
+Stable tag:         1.2.2
+Last Updated:       04-Apr-2025
 Requires at least:  5.8
 Tested up to:       6.8
 Requires PHP:       7.4
@@ -444,6 +444,13 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 1.2.2 - April 4, 2025 =
+
++   New `write_hooks` sets hook names that trigger an immediate cache write.
+    +   Default is `[ 'cron_request', 'updated_option_cron' ]` to fix wp-cron jobs not rescheduling.
+    +   Can be set/overridden with `EAC_OBJECT_CACHE_WRITE_HOOKS` constant.
++   Added action on `action_scheduler_before_process_queue` hook to prevent cache flush triggered by Action Scheduler.
 
 = Version 1.2.1 - March 30, 2025 =
 

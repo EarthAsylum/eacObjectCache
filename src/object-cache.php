@@ -4,9 +4,9 @@
  *
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.2.0
+ * Version:				1.2.2
  * Requires at least:	5.8
- * Tested up to:		6.7
+ * Tested up to:		6.8
  * Requires PHP:		7.4
  * Plugin URI:			https://eacdoojigger.earthasylum.com/eacobjectcache/
  * Author:				EarthAsylum Consulting
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE_VERSION','1.2.0');
+define('EAC_OBJECT_CACHE_VERSION','1.2.2');
 
 /**
  *
@@ -209,6 +209,17 @@ class WP_Object_Cache
 	 * @var int
 	 */
 	public $gc_probability		= 1000;
+
+	/**
+	 * List of actions or filters tha trigger an immediate cache write (EAC_OBJECT_CACHE_WRITE_HOOKS).
+	 * can be changed with $wp_object_cache->write_hooks
+	 *
+	 * @var string[]
+	 */
+	public $write_hooks 		= array(
+		'cron_request',								// when preparing to spawn a cron request
+		'updated_option_cron',						// after updating cron schedule
+	);
 
 	/**
 	 * Samples (every n requests) & outputs an admin notice with htmlStats().
@@ -452,9 +463,28 @@ class WP_Object_Cache
 			['default_expire', 	'is_int', 		'default_expire'],	// default expiration (-1|0|int)
 			['prefetch_misses', 'is_bool', 		'prefetch_misses'],	// pre-fetch cache misses (bool)
 			['probability', 	'is_int', 		'gc_probability'],	// maintenance/sampling probability (int)
+			['write_hooks', 	'is_array', 	'write_hooks'],		// hooks that trigger an immediate cache write
 		) as $option) {
 			$this->get_defined_option(...$option);
 		}
+
+		// actions or filters that trigger an immediate cache write.
+		foreach ($this->write_hooks as $hook)
+		{
+			add_filter( $hook, function($return)
+			{
+				$this->set_delayed_writes( false );
+				return $return;
+			});
+		}
+
+		// when about to process Action Scheduler queue, don't allow runtime flush
+		add_filter( 'action_scheduler_before_process_queue', function($return)
+		{
+			if (! defined('EAC_OBJECT_CACHE_DISABLE_RUNTIME_FLUSH')) {
+				define( 'EAC_OBJECT_CACHE_DISABLE_RUNTIME_FLUSH', true );
+			}
+		});
 	}
 
 
@@ -478,7 +508,9 @@ class WP_Object_Cache
 				$value = $constant;
 			}
 			if (is_string($var) && !is_null($value)) { // don't overwrite null
-				$this->{$var} = $value;
+				$this->{$var} = (is_array($value))
+					? array_merge($this->{$var},$value)
+					: $value;
 			}
 		}
 		return $value;
@@ -1060,8 +1092,9 @@ class WP_Object_Cache
 
 		// $force is intended to reload from L2 cache.
 		// this should not be necessary and may cause loss of recently updated data.
-		// 		Used by 'alloptions' when adding/removing a single option.
-		//if ($force) unset( $this->L1_cache[ $group ][ $blogkey ] );
+		// 		Used by 'alloptions' when adding/removing a single option
+		//		and _get_cron_lock() in wp-cron process.
+		if ($force) unset( $this->L1_cache[ $group ][ $blogkey ] );
 
 		if ( $this->key_exists( $blogkey, $group, $count ) ) {
 			return ( is_object( $this->L1_cache[ $group ][ $blogkey ][ 'value' ] ) )
