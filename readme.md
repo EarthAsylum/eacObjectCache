@@ -1,4 +1,4 @@
-## {eac}Doojigger ObjectCache - SQLite powered WP_Object_Cache Drop-in.  
+## {eac}ObjectCache - a persistent object cache using a SQLite database to cache WordPress objects.  
 [![EarthAsylum Consulting](https://img.shields.io/badge/EarthAsylum-Consulting-0?&labelColor=6e9882&color=707070)](https://earthasylum.com/)
 [![WordPress](https://img.shields.io/badge/WordPress-Plugins-grey?logo=wordpress&labelColor=blue)](https://wordpress.org/plugins/search/EarthAsylum/)
 [![eacDoojigger](https://img.shields.io/badge/Requires-%7Beac%7DDoojigger-da821d)](https://eacDoojigger.earthasylum.com/)
@@ -7,22 +7,22 @@
 
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
-Stable tag:         1.2.2  
-Last Updated:       04-Apr-2025  
+Stable tag:         1.3.0  
+Last Updated:       11-Apr-2025  
 Requires at least:  5.8  
 Tested up to:       6.8  
 Requires PHP:       7.4  
-Requires EAC:       3.0  
+Requires EAC:       3.1  
 Contributors:       [kevinburkholder](https://profiles.wordpress.org/kevinburkholder)  
 License:            GPLv3 or later  
 License URI:        https://www.gnu.org/licenses/gpl.html  
-Tags:               cache, object cache, wp cache, sqlite, performance, {eac}Doojigger,  
+Tags:               persistent object cache, object cache, wp cache, sqlite, performance, {eac}Doojigger,  
 WordPress URI:      https://wordpress.org/plugins/eacobjectcache  
 GitHub URI:         https://github.com/EarthAsylum/eacObjectCache  
 
 </details>
 
-> {eac}ObjectCache is a drop-in persistent object cache using a SQLite database to cache WordPress objects.
+> {eac}ObjectCache is a persistent object cache using a SQLite database to cache WordPress objects; A drop-in replacement to the WP_Object_Cache used by WordPress.
 
 ### Description
 
@@ -49,27 +49,28 @@ SQLite is a fast, small, single-file relational database engine. By using SQLite
     +   Preserves uniqueness of keys.
     +   Manage keys by group name.
 +   Pre-fetch object groups from L2 to L1 cache.
-+   Caches and pre-fetches L2 misses (known to not be in L2 cache).
++   Caches and pre-fetches L2 misses (known to not exist in L2 cache).
     +   Prevents repeated, unnecessary L2 cache reads across requests.
 +   Multisite / Network support:
-    +   Cache by blog id.
-    +   Flush by blog id.
+    +   Cache/flush/switch by blog id.
 +   Caching statistics:
+    +   Cache hits typically well above 90%.
     +   Overall and L1/L2 hits, misses, & ratio.
     +   L1 hits by object groups.
     +   L2 group keys stored.
     +   L2 select/update/delete/commit counts.
-+   Supports a superset of WP_Object_Cache functions.
-+   Easily enabled or disabled from administrator page.
++   Supports an enhanced superset of WP_Object_Cache functions.
++   Easily enabled or disabled from {eac}Doojigger administrator page.
     +   Imports existing transients when enabled.
     +   Exports cached transients when disabled.
 +   Automatically cleans and optimizes SQLite database.
++   Optionally schedule periodic L2 cache rebuild.
 +   Uses the PHP Data Objects (PDO) extension included with PHP.
 
 
 ### Settings
 
-Several cache settings can be modified by adding defined constants to the `wp-config.php` file. The default settings are recommended and optimal in most cases but individual settings may need to be adjusted based on traffic volume, specific requirements, or unique circumstances.
+Several cache settings can be modified by adding defined constants to the `wp-config.php` file. The default settings are recommended and optimal in most cases but individual settings may need to be adjusted based on traffic volume, specific requirements, or unique circumstances. Most of these settings can be adjusted in the {eac}Doojigger administrator screen.
 
 * * *
 
@@ -113,6 +114,7 @@ See [SQLite journal mode](https://www.sqlite.org/pragma.html#pragma_journal_mode
 ```
 
 Sets the maximum number of bytes that are set aside for memory-mapped I/O.
+See [SQLite memory-mapped I/O](https://www.sqlite.org/pragma.html#pragma_mmap_size)
 
 * * *
 
@@ -123,6 +125,7 @@ Sets the maximum number of bytes that are set aside for memory-mapped I/O.
 ```
 
 Sets the SQLite page size for the database.
+See [SQLite page size](https://www.sqlite.org/pragma.html#pragma_page_size)
 
 * * *
 
@@ -133,6 +136,7 @@ Sets the SQLite page size for the database.
 ```
 
 Sets the maximum number of database disk pages that SQLite will hold in memory or the maximum amount of memory to use for page caching.
+See [SQLite cache size](https://www.sqlite.org/pragma.html#pragma_cache_size)
 
 * * *
 
@@ -149,10 +153,10 @@ Sets the number of seconds before a SQLite transaction may timeout in error.
 +   To set SQLite retries                                       (default: 3):
 
 ```
-    define( 'EAC_OBJECT_CACHE_RETRIES', int );
+    define( 'EAC_OBJECT_CACHE_MAX_RETRIES', int );
 ```
 
-Sets the number of retries to attempt on critical actions.
+Sets the maximum number of retries to attempt on critical actions.
 
 * * *
 
@@ -162,7 +166,7 @@ Sets the number of retries to attempt on critical actions.
     define( 'EAC_OBJECT_CACHE_DELAYED_WRITES', true|false|int );
 ```
 
-{eac}ObjectCache caches all objects in memory and writes new or updated objects to the L2 (SQLite) cache. *delayed writes* simply holds objects in memory until the number of objects reaches a specified threshold, then writes them, in a single transaction, to the L2 cache (a.k.a. write-back caching). Setting *delayed writes* to false turns this functionality off (a.k.a. write-through caching). Setting to true writes all records only at the end of the script process/page load. Setting this to a number sets the object pending threshold to that number of objects.
+{eac}ObjectCache caches all objects in memory and writes new or updated objects to the L2 (SQLite) cache. *delayed writes* simply holds objects in memory until the number of objects reaches a specified threshold, then writes them, in a single transaction, to the L2 cache (a.k.a. write-back caching). Setting *delayed writes* to false turns this functionality off (a.k.a. write-through caching). Setting to true writes all records only at the end of the script process/page request. Setting this to a number sets the object pending threshold to that number of objects.
 
 * * *
 
@@ -172,7 +176,7 @@ Sets the number of retries to attempt on critical actions.
     define( 'EAC_OBJECT_CACHE_DEFAULT_EXPIRE', -1|0|int );
 ```
 
-When using the default WordPress object cache, object expiration isn't very important because the entire cache expires at the end of the script process/page load. With a persistent cache, this isn't the case. When an object is cached, the developer has the option of specifying an expiration time for that object. Since we don't know the intent of the developer when not specifying an expiration time, cache persistence *may* sometimes cause issues. Setting *default expiration* may alleviate problems and/or possibly improve performance by limiting cache data. When set to -1, objects with no expiration are not saved in the L2 cache.
+When using the default WordPress object cache, object expiration isn't very important because the entire cache expires at the end of the script process/page request. With a persistent cache, this isn't the case. When an object is cached, the developer has the option of specifying an expiration time for that object. Since we don't know the intent of the developer when not specifying an expiration time, cache persistence *may* sometimes cause issues. Setting *default expiration* may alleviate problems and/or possibly improve performance by limiting cache data. When set to -1, objects with no expiration are not saved in the L2 cache.
 
 _\*  Transients with no expiration overide this setting and are allowed (as that is the normal WordPress functionality)._
 
@@ -196,7 +200,7 @@ Pre-fetching cache misses (keys that are not in the L2 persistent cache) prevent
     define( 'EAC_OBJECT_CACHE_PROBABILITY', int );
 ```
 
-Sets the probability of running maintenance tasks (approximately 1 in n requests, n>=10).
+Sets the probability of running maintenance (garbage collection) tasks - approximately 1 in n requests, n>=10.
 
 * * *
 
@@ -272,13 +276,13 @@ Pre-fetching a group of records may be much faster than loading each key individ
 +   Returns an array of current stats.
 
 ```
-    $wp_object_cache->getStats();
+    $cacheStats = $wp_object_cache->getStats();
 ```
 
 +   Returns an array of stats from the last sample saved (or current).
 
 ```
-    $wp_object_cache->getLastSample();
+    $cacheStats = $wp_object_cache->getLastSample();
 ```
 
 ####  Optional runtime settings
@@ -289,13 +293,19 @@ Pre-fetching a group of records may be much faster than loading each key individ
     $wp_object_cache->delayed_writes = true | false | n;
 ```
 
-+   Outputs an administrator notice using htmlStats().
++    Samples (every n requests) & outputs an admin notice with htmlStats().
 
 ```
     $wp_object_cache->display_stats = n;
 ```
 
-+   Outputs an administrator notice on error (n = sample ever n requests).
++    Change the default expiration time for objects with no expiration.
+
+```
+    $wp_object_cache->default_expire = n;
+```
+
++   Outputs an administrator notice on error.
 
 ```
     $wp_object_cache->display_errors = true;
@@ -330,9 +340,13 @@ wp_cache_replace_multiple( array $data, $group = '', $expire = 0 )
 
 [wp_cache_get_multiple](https://developer.wordpress.org/reference/functions/wp_cache_get_multiple/)( $keys, $group = '', $force = false )
 
+wp_cache_get_group( $group )
+
 [wp_cache_delete](https://developer.wordpress.org/reference/functions/wp_cache_delete/)( $key, $group = '' )
 
 [wp_cache_delete_multiple](https://developer.wordpress.org/reference/functions/wp_cache_delete_multiple/)( array $keys, $group = '' )
+
+wp_cache_delete_group( $group )
 
 [wp_cache_incr](https://developer.wordpress.org/reference/functions/wp_cache_incr/)( $key, $offset = 1, $group = '' )
 
@@ -365,11 +379,9 @@ wp_cache_add_prefetch_groups( $groups )
 
 ```php
     /*
-     * add custom groups to pre-fetch
+     * add custom groups to global (not blog-specific)
      */
-    if (wp_cache_supports( 'prefetch_groups' )) {
-        wp_cache_add_prefetch_groups( [ 'ridiculous', 'absurd' ] );
-    }
+    wp_cache_add_global_groups( [ 'ridiculous', 'absurd' ] );
 
     /*
      * calculate the sum of all digits in Pi multiplied by each known prime number...
@@ -378,6 +390,13 @@ wp_cache_add_prefetch_groups( $groups )
     if ( ! $result = wp_cache_get('calculation_result','ridiculous') ) {
         $result = do_calculation();
         wp_cache_set( 'calculation_result', $result, 'ridiculous', YEAR_IN_SECONDS );
+    }
+
+    /*
+     * get all objects in the 'ridiculous' group.
+     */
+    if (wp_cache_supports( 'get_group' )) {
+        $ridiculous = wp_cache_get_group( 'ridiculous' );
     }
 
     /*
@@ -396,7 +415,11 @@ wp_cache_add_prefetch_groups( $groups )
 
 ### Installation
 
-**{eac}ObjectCache** is an extension plugin to and requires installation and registration of [{eac}Doojigger](https://eacDoojigger.earthasylum.com/).
+*{eac}ObjectCache* is an extension plugin to and is fully functional with installation and registration of [{eac}Doojigger](https://eacDoojigger.earthasylum.com/).
+
+However, the core `object-cache.php` file may be installed without {eac}Doojigger (referred to as 'detached' mode).
+
+In detached mode, the plugin will attempt to copy the `object-cache.php` file to the `/wp-content` folder on activation, or you may manually copy the `object-cache.php` file from the plugin `/src` folder to the `/wp-content` folder to activate. Options can then be set using the documented PHP constants in the `wp-config.php` file.
 
 #### Automatic Plugin Installation
 
@@ -418,7 +441,7 @@ See [Managing Plugins -> Manual Plugin Installation](https://wordpress.org/suppo
 
 #### Settings
 
-Once installed and activated options for this extension will show in the 'Object Cache' tab of {eac}Doojigger settings.
+Once installed and activated, options for this extension will show in the 'Object Cache' tab of {eac}Doojigger settings.
 
 
 ### Screenshots
@@ -437,6 +460,10 @@ Once installed and activated options for this extension will show in the 'Object
 
 #### Additional Information
 
-+   {eac}ObjectCache is an extension plugin to and requires installation and registration of [{eac}Doojigger](https://eacDoojigger.earthasylum.com/).
+*{eac}ObjectCache* is an extension plugin to and is fully functional with installation and registration of [{eac}Doojigger](https://eacDoojigger.earthasylum.com/).
+
+However, the core `object-cache.php` file may be installed without {eac}Doojigger - referred to as 'detached' mode.
+
+In detached mode, the plugin will attempt to copy the `object-cache.php` file to the `/wp-content` folder on activation, or you may manually copy the `object-cache.php` file from the plugin `/src` folder to the `/wp-content` folder to activate. Options can then be set using the documented PHP constants in the `wp-config.php` file.
 
 

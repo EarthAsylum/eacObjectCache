@@ -11,6 +11,8 @@
  * @author Kevin Burkholder <KBurkholder@EarthAsylum.com>
  * @link https://eacdoojigger.earthasylum.com/eacobjectcache/
  *
+ * @version 25.0407.1
+ *
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -208,6 +210,24 @@ function wp_cache_get_multiple( $keys, $group = '', $force = false ) {
 }
 
 /**
+ * Retrieves all values for a group from the cache in one call.
+ *
+ * Before calling this function, always check for group delete support using the
+ * `wp_cache_supports( 'get_group' )` function.
+ *
+ * @see WP_Object_Cache::get_group()
+ * @global WP_Object_Cache $wp_object_cache Object cache global instance.
+ *
+ * @param string $group Where the cache contents are grouped. Default 'default'.
+ * @return array Array of return values, grouped by key.
+ */
+function wp_cache_get_group( $group = '' ) {
+	global $wp_object_cache;
+
+	return $wp_object_cache->get_group( $group );
+}
+
+/**
  * Removes the cache contents matching key and group.
  *
  * @since 2.0.0
@@ -242,6 +262,25 @@ function wp_cache_delete_multiple( array $keys, $group = '' ) {
 	global $wp_object_cache;
 
 	return $wp_object_cache->delete_multiple( $keys, $group );
+}
+
+/**
+ * Deletes all keys for a group in one call.
+ * flush_group() is immediate, delete_group() fetches rows and caches deletes.
+ *
+ * Before calling this function, always check for group delete support using the
+ * `wp_cache_supports( 'delete_group' )` function.
+ *
+ * @see WP_Object_Cache::delete_group()
+ * @global WP_Object_Cache $wp_object_cache Object cache global instance.
+ *
+ * @param string $group Where the cache contents are grouped. Default 'default'.
+ * @return array Array of return values, grouped by key.
+ */
+function wp_cache_delete_group( $group  ) {
+	global $wp_object_cache;
+
+	return $wp_object_cache->delete_group( $group );
 }
 
 /**
@@ -317,6 +356,7 @@ function wp_cache_flush_runtime() {
 
 /**
  * Removes all cache items in a group, if the object cache implementation supports it.
+ * flush_group() is immediate, delete_group() fetches rows and caches deletes.
  *
  * Before calling this function, always check for group flushing support using the
  * `wp_cache_supports( 'flush_group' )` function.
@@ -365,8 +405,10 @@ function wp_cache_supports( $feature ) {
 		case 'add_multiple':
 		case 'set_multiple':
 		case 'get_multiple':
+		case 'get_group':
 		case 'replace_multiple':
 		case 'delete_multiple':
+		case 'delete_group':
 		case 'flush_runtime':
 		case 'flush_group':
 		case 'flush_blog':

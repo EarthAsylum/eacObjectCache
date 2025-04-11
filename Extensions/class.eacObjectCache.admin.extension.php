@@ -18,7 +18,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '25.0320.1';
+		const VERSION	= '25.0409.1';
 
 		/**
 		 * @var string to set default tab name
@@ -165,6 +165,27 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 						),
 					]
 				);
+
+				if ($this->checkForInstall('admin') === true)
+				{
+					$schedules = ['Never' => ''];
+					foreach ($this->cron->getIntervals('core+self') as $name => $interval) {
+						$schedules[ $interval['display'] ] = $name;
+					}
+					$this->registerExtensionOptions( self::TAB_NAME,
+						[
+							'cache_rebuild' 	=> array(
+									'type'		=> 	'select',
+									'label'		=> 	'Rebuild Cache',
+									'options'	=> 	$schedules,
+									'info'		=>	'Rebuild the persistent object cache on a regular schedule. '.
+													'This keeps the cache at a reasonable size and prevents '.
+													'potential lock-ups on high-volumn sites or mult-site networks.',
+							),
+						]
+					);
+				};
+
 				$this->registerExtensionOptions( self::TAB_NAME,
 					[
 						'object_cache_stats'	=> array(
@@ -198,8 +219,6 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					// updates to wp-config.php...
 					if ($this->wpConfig) {
 						$this->admin_options_settings_advanced();
-					} else {
-						$this->options_settings_extras(false);
 					}
 				}
 			}
@@ -246,7 +265,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					'_timeout'			=> array(
 							'type'		=> 	'number',
 							'label'		=> 	'Cache Timeout',
-							'default'	=>	(int)$wp_object_cache->pdo_timeout,
+							'default'	=>	(int)$wp_object_cache->timeout,
 							'after'		=> ' seconds',
 							'info'		=> 	'Set the SQLite database timeout.',
 							'attributes'=>	['min'=>'1','max'=>'8','step'=>'1'],
@@ -262,10 +281,30 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 							'attributes'=>	['min'=>'1','max'=>'8','step'=>'1'],
 							'validate'	=>	[$this,'validate_config_option'],
 					),
+
+					'object_cache_delayed_writes'	=> array(
+							'type'		=> 	'select',
+							'label'		=> 	'Delayed Writes',
+							'options'	=>  [
+												"Disabled"				=> 0, 	// false
+												"8 Records"				=> 8,
+												"16 Records"			=> 16,
+												"32 Records"			=> 32,
+												"64 Records"			=> 64,
+												"96 Records"			=> 96,
+												"128 Records"			=> 128,
+												"256 Records"			=> 256,
+												"Unlimited"				=> 1,	// true
+											],
+							'default'	=>	(int)$wp_object_cache->delayed_writes,
+							'info'		=> 	'Write-Back Caching - Set the number of records to hold in memory before writing to disk.',
+							'help'		=> 	"[info] The lower the number, the more frequent physical disk writes, but greater integrity. ".
+											"A Higher value means fewer disk writes and faster operation. ".
+											"Records are always written at the end of the script process (page load).",
+							'validate'	=>	[$this,'validate_config_option'],
+					),
 				]
 			);
-
-			$this->options_settings_extras(true);
 
 			$this->registerExtensionOptions( self::TAB_NAME,
 				[
@@ -316,7 +355,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 												"1 in 5,000 Requests"		=> 5000,
 												"1 in 10,000 Requests"		=> 10000,
 											],
-							'default'	=>	$wp_object_cache->gc_probability,
+							'default'	=>	$wp_object_cache->probability,
 							'info'		=> 	'Determines how often expired objects are purged and the SQLite table is optimized.',
 							'validate'	=>	[$this,'validate_config_option'],
 					),
@@ -358,43 +397,6 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 
 
 		/**
-		 * register advanced options on options_settings_page
-		 *
-		 * @return void
-		 */
-		public function options_settings_extras(bool $isAdmin): void
-		{
-			global $wp_object_cache;
-
-			$this->registerExtensionOptions( self::TAB_NAME,
-				[
-					'object_cache_delayed_writes'	=> array(
-							'type'		=> 	'select',
-							'label'		=> 	'Delayed Writes',
-							'options'	=>  [
-												"Disabled"				=> 0, 	// false
-												"8 Records"				=> 8,
-												"16 Records"			=> 16,
-												"32 Records"			=> 32,
-												"64 Records"			=> 64,
-												"96 Records"			=> 96,
-												"128 Records"			=> 128,
-												"256 Records"			=> 256,
-												"Unlimited"				=> 1,	// true
-											],
-							'default'	=>	(int)$wp_object_cache->delayed_writes,
-							'info'		=> 	'Write-Back Caching - Set the number of records to hold in memory before writing to disk.',
-							'help'		=> 	"[info] The lower the number, the more frequent physical disk writes, but greater integrity. ".
-											"A Higher value means fewer disk writes and faster operation. ".
-											"Records are always written at the end of the script process (page load).",
-							'validate'	=>	($isAdmin) ? [$this,'validate_config_option'] : null,
-					),
-				]
-			);
-		}
-
-
-		/**
 		 * validate/set config options
 		 *
 		 * @return	void
@@ -410,14 +412,14 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_MMAP_SIZE', "{$value}", ['raw'=>true] );
 					break;
 				case '_timeout':
-					if ($value == $wp_object_cache->pdo_timeout) return $value; 	// no change
+					if ($value == $wp_object_cache->timeout) return $value; 	// no change
 					$value = (is_numeric($value)) ? (int)$value : 3;
 					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_TIMEOUT', "{$value}", ['raw'=>true] );
 					break;
 				case '_retries':
 					if ($value == $wp_object_cache->max_retries) return $value; 	// no change
 					$value = (is_numeric($value)) ? (int)$value : 3;
-					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_RETRIES', "{$value}", ['raw'=>true] );
+					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_MAX_RETRIES', "{$value}", ['raw'=>true] );
 					break;
 				case 'object_cache_delayed_writes':
 					if ($value == (int)$wp_object_cache->delayed_writes) return $value; 	// no change
@@ -435,7 +437,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_PREFETCH_MISSES', "{$value}", ['raw'=>true] );
 					break;
 				case '_probability':
-					if ($value == $wp_object_cache->gc_probability) return $value; 	// no change
+					if ($value == $wp_object_cache->probability) return $value; 	// no change
 					$value = (is_numeric($value)) ? (int)$value : 100;
 					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_PROBABILITY', "{$value}", ['raw'=>true] );
 					break;
@@ -500,7 +502,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 				<code>define( 'EAC_OBJECT_CACHE_TIMEOUT', int );</code>
 
 			<li>To set SQLite retries (default: 3)<br>
-				<code>define( 'EAC_OBJECT_CACHE_RETRIES', int );</code>
+				<code>define( 'EAC_OBJECT_CACHE_MAX_RETRIES', int );</code>
 
 			<li>To set delayed writes (default: 32):<br>
 				<code>define( 'EAC_OBJECT_CACHE_DELAYED_WRITES', true|false|int );</code>
@@ -646,17 +648,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 
 			if ($action == 'uninstall' || $action == 'delete')
 			{
-				global $wp_object_cache;
-				if (method_exists($wp_object_cache,'uninstall')) {
-					if (is_multisite()) {
-						$this->forEachNetworkSite(function() use($wp_object_cache)
-							{
-								$wp_object_cache->uninstall(false);
-							}
-						);
-					}
-					$wp_object_cache->uninstall(true);
-				}
+				$this->do_action('rebuild_object_cache');
 			}
 			else if ($fs = $this->fs->load_wp_filesystem())
 			{

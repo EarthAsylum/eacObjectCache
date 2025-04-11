@@ -18,7 +18,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '25.0330.1';
+		const VERSION	= '25.0410.1';
 
 		/**
 		 * @var string to set default tab name
@@ -56,16 +56,11 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		{
 			if ( ! parent::initialize() ) return; // disabled
 
-			if (defined('EAC_OBJECT_CACHE_VERSION'))
-			{
-				global $wp_object_cache;
-				$wp_object_cache->display_stats 	= (int)$this->get_option('object_cache_stats',$wp_object_cache->display_stats);
-				$wp_object_cache->delayed_writes 	= (int)$this->get_option('object_cache_delayed_writes',$wp_object_cache->delayed_writes);
-				$wp_object_cache->display_errors 	= $this->is_admin();
-				$wp_object_cache->log_errors 		= true;
-			} else {
-				return $this->isEnabled(false);
-			}
+			global $wp_object_cache;
+			$wp_object_cache->display_stats 	= (int)$this->get_option('object_cache_stats',$wp_object_cache->display_stats);
+			$wp_object_cache->delayed_writes 	= (int)$this->get_option('object_cache_delayed_writes',$wp_object_cache->delayed_writes);
+		//	$wp_object_cache->display_errors 	= $this->is_admin();
+			$wp_object_cache->log_errors 		= true;
 		}
 
 
@@ -78,13 +73,46 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		{
 			parent::addActionsAndFilters();
 
-			if (defined('EAC_OBJECT_CACHE_VERSION'))
+			if (is_main_site())
 			{
-				if (get_current_blog_id() == get_main_site_id()) {
-					global $wp_object_cache;
-				//	$this->add_action( 'daily_event', array($wp_object_cache, 'optimize') );
-					$this->do_action( 'add_event_task', 'daily', array($wp_object_cache, 'optimize'));
+				global $wp_object_cache;
+				$this->do_action( 'add_event_task', 'daily', array($wp_object_cache, 'optimize'));
+
+				$interval = (is_multisite())
+					? $this->get_site_option('cache_rebuild')
+					: $this->get_option('cache_rebuild');
+				if ( $interval ) {
+					$this->do_action( 'add_event_task', $interval, array($this, 'rebuild_object_cache'));
 				}
+			}
+
+			$this->add_action('rebuild_object_cache', array($this, 'rebuild_object_cache'));
+		}
+
+
+		/**
+		 * Rebuild object cach by removing cache file
+		 *
+		 * @return	bool
+		 */
+		public function rebuild_object_cache()
+		{
+			global $wp_object_cache;
+			if (method_exists($wp_object_cache,'rebuild_object_cache')) {
+				if (is_multisite()) {
+					$isNetAdmin 	= $this->is_network_admin();
+					$currentBlog 	= get_current_blog_id();
+					$this->is_network_admin(true);
+					$this->forEachNetworkSite(function() use($wp_object_cache,$currentBlog)
+						{
+							if (get_current_blog_id() != $currentBlog) {
+								$wp_object_cache->rebuild_object_cache(false);
+							}
+						}
+					);
+					$this->is_network_admin($isNetAdmin);
+				}
+				$wp_object_cache->rebuild_object_cache(true);
 			}
 		}
 	}

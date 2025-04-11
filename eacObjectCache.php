@@ -2,7 +2,7 @@
 namespace EarthAsylumConsulting;
 
 /**
- * {eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in.
+ * {eac}ObjectCache - a persistent object cache using a SQLite database to cache WordPress objects.
  *
  * @category	WordPress Plugin
  * @package		{eac}ObjectCache\{eac}Doojigger Extensions
@@ -12,8 +12,8 @@ namespace EarthAsylumConsulting;
  *
  * @wordpress-plugin
  * Plugin Name:			{eac}ObjectCache
- * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.2.2
+ * Description:			{eac}ObjectCache - a light-weight and efficient persistent object cache that uses a fast SQLite database to cache WordPress objects.
+ * Version:				1.3.0
  * Requires at least:	5.8
  * Tested up to:		6.8
  * Requires PHP:		7.4
@@ -26,12 +26,10 @@ namespace EarthAsylumConsulting;
 
 if (!defined('EACDOOJIGGER_VERSION'))
 {
-	\add_action( 'all_admin_notices', function()
-		{
-			echo '<div class="notice notice-error is-dismissible"><p>{eac}ObjectCache requires installation & activation of '.
-				 '<a href="https://eacdoojigger.earthasylum.com/eacdoojigger" target="_blank">{eac}Doojigger</a>.</p></div>';
-		}
-	);
+	/*
+	 * Detached installer. Installs object-cache.php to /wp-content.
+	 */
+	include 'detached-install.php';
 	return;
 }
 
