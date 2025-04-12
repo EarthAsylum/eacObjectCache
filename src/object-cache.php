@@ -2401,7 +2401,7 @@ class WP_Object_Cache
 	 */
 	public function rebuild_object_cache(bool $complete = true): bool
 	{
-		$this->uninstall($complete);
+		return $this->uninstall($complete);
 	}
 
 
