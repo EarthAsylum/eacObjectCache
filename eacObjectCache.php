@@ -13,7 +13,7 @@ namespace EarthAsylumConsulting;
  * @wordpress-plugin
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}ObjectCache - a light-weight and efficient persistent object cache that uses a fast SQLite database to cache WordPress objects.
- * Version:				1.3.0
+ * Version:				1.3.1
  * Requires at least:	5.8
  * Tested up to:		6.8
  * Requires PHP:		7.4
@@ -74,7 +74,7 @@ class eacObjectCache
 				/*
     			 * Add our extension to load
     			 */
-				$extensionDirectories[ plugin_basename( __FILE__ ) ] = [plugin_dir_path( __FILE__ ).'/Extensions'];
+				$extensionDirectories[ plugin_basename( __FILE__ ) ] = [plugin_dir_path( __FILE__ )];
 				return $extensionDirectories;
 			}
 		);

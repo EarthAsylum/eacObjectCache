@@ -18,7 +18,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '25.0409.1';
+		const VERSION	= '25.0419.1';
 
 		/**
 		 * @var string to set default tab name
@@ -44,6 +44,8 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 		{
 			parent::__construct($plugin, self::ALLOW_ADMIN|self::ONLY_ADMIN|self::ALLOW_NETWORK);
 
+			$this->registerExtension( self::TAB_NAME );
+
 			if ($this->is_admin())
 			{
 				$this->wpConfig = $this->wpconfig_handle();
@@ -59,7 +61,6 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					}
 				);
 
-				$this->registerExtension( self::TAB_NAME );
 				// Register plugin options when needed
 				$this->add_action( "options_settings_page", array($this, 'admin_options_settings') );
 				// Add contextual help

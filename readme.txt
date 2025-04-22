@@ -1,8 +1,8 @@
 === {eac}ObjectCache - a persistent object cache using a SQLite database to cache WordPress objects. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.3.0
-Last Updated:       11-Apr-2025
+Stable tag:         1.3.1
+Last Updated:       19-Apr-2025
 Requires at least:  5.8
 Tested up to:       6.8
 Requires PHP:       7.4
@@ -471,6 +471,13 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 1.3.1 – Apr 19, 2025 =
+
++   Compatible with WordPress 6.8.
++   Prevent `_load_textdomain_just_in_time was called incorrectly` notice from WordPress.
+    +   All extensions - via eacDoojigger 3.1.
+    +   Modified extension registration in constructor.
 
 = Version 1.3.0 - April 11, 2025 =
 
