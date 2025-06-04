@@ -18,7 +18,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '25.0419.1';
+		const VERSION	= '25.0603.1';
 
 		/**
 		 * @var string to set default tab name
@@ -640,6 +640,8 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 		 */
 		public function install_object_cache($action)
 		{
+			$FS_CHMOD_DIR = defined('FS_CHMOD_DIR') ? FS_CHMOD_DIR : (0755 & ~ umask());
+
 			if ($this->checkForInstall() !== true)
 			{
 				return false;
@@ -659,9 +661,9 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 
 				// since we write not using $fs, we need owner & group access
 				if (!$fs->exists($cache)) {
-					$fs->mkdir($cache,FS_CHMOD_DIR|0660);
+					$fs->mkdir($cache,$FS_CHMOD_DIR|0660);
 				} else {
-					$fs->chmod($cache,FS_CHMOD_DIR|0660);
+					$fs->chmod($cache,$FS_CHMOD_DIR|0660);
 				}
 			}
 

@@ -1,8 +1,8 @@
 === {eac}ObjectCache - a persistent object cache using a SQLite database to cache WordPress objects. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.3.1
-Last Updated:       19-Apr-2025
+Stable tag:         1.3.2
+Last Updated:       03-Jun-2025
 Requires at least:  5.8
 Tested up to:       6.8
 Requires PHP:       7.4
@@ -472,7 +472,11 @@ You should receive a copy of the GNU General Public License along with this prog
 
 == Changelog ==
 
-= Version 1.3.1 – Apr 19, 2025 =
+= Version 1.3.2 – June 3, 2025 =
+
++   Fix error in object-cache.php & ObjectCache.admin when FS_CHMOD_FILE/DIR is not defined.
+
+= Version 1.3.1 – April 19, 2025 =
 
 +   Compatible with WordPress 6.8.
 +   Prevent `_load_textdomain_just_in_time was called incorrectly` notice from WordPress.
