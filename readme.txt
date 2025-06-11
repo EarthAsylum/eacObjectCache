@@ -1,8 +1,8 @@
 === {eac}ObjectCache - a persistent object cache using a SQLite database to cache WordPress objects. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.3.2
-Last Updated:       03-Jun-2025
+Stable tag:         1.3.3
+Last Updated:       10-Jun-2025
 Requires at least:  5.8
 Tested up to:       6.8
 Requires PHP:       7.4
@@ -471,6 +471,11 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 1.3.3 – June 10, 2025 =
+
++   Save (persist) added prefetch groups since pre-fetching happens before add.
++   Don't check databasse for prefetch group keys after pre-fetching.
 
 = Version 1.3.2 – June 3, 2025 =
 

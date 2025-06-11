@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE_VERSION','1.3.2');
+define('EAC_OBJECT_CACHE_VERSION','1.3.3');
 
 /**
  * Derived from WordPress core WP_Object_Cache (wp-includes/class-wp-object-cache.php)
@@ -785,7 +785,9 @@ class WP_Object_Cache
 	{
 		return ($this->key_exists_memory( $blogkey, $group, $count ))
 			? (bool) $this->L1_cache[ $group ][ $blogkey ]
-			: $this->key_exists_database( $blogkey, $group, $count );
+			: ( !isset($this->prefetch_groups[$group])
+				? $this->key_exists_database( $blogkey, $group, $count )
+				: false );
 	}
 
 
@@ -1548,6 +1550,7 @@ class WP_Object_Cache
 		$groups = array_fill_keys( (array) $groups, true );
 		$this->prefetch_groups = array_merge( $this->prefetch_groups, $defined_groups, $groups );
 
+		$this->set('prefetch_groups', $this->prefetch_groups, self::GROUP_ID, 0);
 		return $this->prefetch_groups;
 	}
 
@@ -1580,6 +1583,7 @@ class WP_Object_Cache
 		if ( ! $this->db ) return;
 
 		$blogkeys = [];
+		$this->prefetch_groups = $this->get_cache('prefetch_groups',self::GROUP_ID);
 		foreach (array_keys($this->prefetch_groups) as $group) {
 			if (! isset( $this->nonp_groups[ $group ] ) ) {
 				$blogkeys[ $group ] = [ $this->get_valid_key('%',$group) ];
