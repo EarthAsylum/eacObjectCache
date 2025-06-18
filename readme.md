@@ -7,8 +7,8 @@
 
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
-Stable tag:         1.3.3  
-Last Updated:       10-Jun-2025  
+Stable tag:         1.3.4  
+Last Updated:       17-Jun-2025  
 Requires at least:  5.8  
 Tested up to:       6.8  
 Requires PHP:       7.4  
@@ -465,5 +465,9 @@ Once installed and activated, options for this extension will show in the 'Objec
 However, the core `object-cache.php` file may be installed without {eac}Doojigger - referred to as 'detached' mode.
 
 In detached mode, the plugin will attempt to copy the `object-cache.php` file to the `/wp-content` folder on activation, or you may manually copy the `object-cache.php` file from the plugin `/src` folder to the `/wp-content` folder to activate. Options can then be set using the documented PHP constants in the `wp-config.php` file.
+
+#### See Also
+
+[{eac}KeyValue](https://github.com/EarthAsylum/eacKeyValue) - An easy to use, efficient, key-value pair storage mechanism for WordPress that takes advatage of the WP Object Cache.
 
 

@@ -4,7 +4,7 @@
  *
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.3.2
+ * Version:				1.3.4
  * Requires at least:	5.8
  * Tested up to:		6.8
  * Requires PHP:		7.4
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE_VERSION','1.3.3');
+define('EAC_OBJECT_CACHE_VERSION','1.3.4');
 
 /**
  * Derived from WordPress core WP_Object_Cache (wp-includes/class-wp-object-cache.php)
@@ -1583,7 +1583,7 @@ class WP_Object_Cache
 		if ( ! $this->db ) return;
 
 		$blogkeys = [];
-		$this->prefetch_groups = $this->get_cache('prefetch_groups',self::GROUP_ID);
+		$this->prefetch_groups = $this->get_cache('prefetch_groups',self::GROUP_ID) ?: [];
 		foreach (array_keys($this->prefetch_groups) as $group) {
 			if (! isset( $this->nonp_groups[ $group ] ) ) {
 				$blogkeys[ $group ] = [ $this->get_valid_key('%',$group) ];

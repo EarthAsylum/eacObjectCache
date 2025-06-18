@@ -1,8 +1,8 @@
 === {eac}ObjectCache - a persistent object cache using a SQLite database to cache WordPress objects. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.3.3
-Last Updated:       10-Jun-2025
+Stable tag:         1.3.4
+Last Updated:       17-Jun-2025
 Requires at least:  5.8
 Tested up to:       6.8
 Requires PHP:       7.4
@@ -458,6 +458,10 @@ However, the core `object-cache.php` file may be installed without {eac}Doojigge
 
 In detached mode, the plugin will attempt to copy the `object-cache.php` file to the `/wp-content` folder on activation, or you may manually copy the `object-cache.php` file from the plugin `/src` folder to the `/wp-content` folder to activate. Options can then be set using the documented PHP constants in the `wp-config.php` file.
 
+= See Also =
+
+[{eac}KeyValue](https://github.com/EarthAsylum/eacKeyValue) - An easy to use, efficient, key-value pair storage mechanism for WordPress that takes advatage of the WP Object Cache.
+
 
 == Copyright ==
 
@@ -471,6 +475,10 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 1.3.4 – June 17, 2025 =
+
++   Fixed bug (potential crash) introduced with persisting prefetch groups.
 
 = Version 1.3.3 – June 10, 2025 =
 
