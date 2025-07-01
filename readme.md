@@ -7,8 +7,8 @@
 
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
-Stable tag:         1.3.4  
-Last Updated:       17-Jun-2025  
+Stable tag:         1.4.0  
+Last Updated:       27-Jun-2025  
 Requires at least:  5.8  
 Tested up to:       6.8  
 Requires PHP:       7.4  
@@ -48,6 +48,7 @@ SQLite is a fast, small, single-file relational database engine. By using SQLite
 +   Cache by object group name.
     +   Preserves uniqueness of keys.
     +   Manage keys by group name.
+    +   Supports group name attributes (:sitewide, :nocaching, :permanent, :prefetch)
 +   Pre-fetch object groups from L2 to L1 cache.
 +   Caches and pre-fetches L2 misses (known to not exist in L2 cache).
     +   Prevents repeated, unnecessary L2 cache reads across requests.
@@ -59,7 +60,7 @@ SQLite is a fast, small, single-file relational database engine. By using SQLite
     +   L1 hits by object groups.
     +   L2 group keys stored.
     +   L2 select/update/delete/commit counts.
-+   Supports an enhanced superset of WP_Object_Cache functions.
++   Supports an enhanced superset of WP Object Cache functions.
 +   Easily enabled or disabled from {eac}Doojigger administrator page.
     +   Imports existing transients when enabled.
     +   Exports cached transients when disabled.
@@ -210,7 +211,7 @@ Sets the probability of running maintenance (garbage collection) tasks - approxi
     define( 'EAC_OBJECT_CACHE_GLOBAL_GROUPS', [ 'groupA', 'groupB', ... ] );
 ```
 
-Global Object groups are not tagged with or separated by the site/blog id.
+Global object groups are not tagged with or separated by the site/blog id.
 
 _\* WordPress already defines several global groups that do not need to be duplicated here, rather the groups entered here are added to those defined by WordPress._
 
@@ -257,6 +258,15 @@ Pre-fetching a group of records may be much faster than loading each key individ
     define( 'EAC_OBJECT_CACHE_DISABLE_GROUP_FLUSH', true );
     define( 'EAC_OBJECT_CACHE_DISABLE_BLOG_FLUSH', true );
     define( 'EAC_OBJECT_CACHE_DISABLE_RUNTIME_FLUSH', true );
+```
+
+* * *
+
++   To disable the importing and/or exporting of transients:
+
+```
+	define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_IMPORT, true );
+	define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_EXPORT, true );
 ```
 
 #### Utility methods
@@ -317,8 +327,25 @@ Pre-fetching a group of records may be much faster than loading each key individ
     $wp_object_cache->log_errors = true;
 ```
 
+#### Group Name Attributes
 
-### WP-Cache
+Specifying group attributes can be done in two ways:
+
+1.   Using the `wp_cache_add_global_groups()`, `wp_cache_add_non_persistent_groups()`, `wp_cache_add_permanent_groups()` and `wp_cache_add_prefetch_groups()` functions.
+
+2.   By adding group names to the `EAC_OBJECT_CACHE_GLOBAL_GROUPS`, `EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS`, `EAC_OBJECT_CACHE_PERMANENT_GROUPS` and `EAC_OBJECT_CACHE_PREFETCH_GROUPS` constants in wp-config.php. 
+
+Now, in addition, a developer can set the attribute by adding a suffix to the group name when storing and accessing the object.
+
++   Global group - `{group}:sitewide`
++   Non-Persistent group - `{group}:nocaching`
++   Permanent group - `{group}:permanent`
++   Prefetch group - `{group}:prefetch`
+
+Adding a group suffix makes the group distinct (i.e. `{group}` <> `{group}:sitewide`). Multiple attributes are not supported.
+
+
+### WP Cache Functions
 
 #### Implemented Standard and Non-Standard WP-Cache API Functions:
 
@@ -409,6 +436,14 @@ wp_cache_add_prefetch_groups( $groups )
      */
     if (wp_cache_supports( 'flush_blog' )) {
         wp_cache_flush_blog();
+    }
+
+    /*
+     * using a group suffix to make the group global (site-wide).
+     */
+    if ( ! $result = wp_cache_get('my_query_result','my_query_group:sitewide') ) {
+        $result = $wpdb->query( $wpdb->prepare( 'SELECT...' ) );
+        wp_cache_set( 'my_query_result', $result, 'my_query_group:sitewide', DAY_IN_SECONDS );
     }
 ```
 
