@@ -519,6 +519,7 @@ You should receive a copy of the GNU General Public License along with this prog
     +   `wp_using_ext_object_cache( false )` may temporarily disable L2 caching while allowing L1 access.
 +   New (internal) `select_cursor()`, `select_each()`, and updated `select_all()` methods for better cursor/array management when retrieving multiple records from L2.
 +   New (non-standard) sub-group or group name suffix to indicate specific attributes of a group:
+    +   Global group - `{group}:sitewide` (applies to all sites in a multi-site network).
     +   Non-Persistent group - `{group}:nocaching` (not saved in the L2 cache).
     +   Permanent group - `{group}:permanent` (no expiration time required or set).
     +   Prefetch group - `{group}:prefetch` (load to L1 cache on startup).
