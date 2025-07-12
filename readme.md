@@ -7,12 +7,11 @@
 
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/  
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)  
-Stable tag:         1.4.0  
-Last Updated:       27-Jun-2025  
+Stable tag:         1.4.1  
+Last Updated:       12-Jul-2025  
 Requires at least:  5.8  
 Tested up to:       6.8  
 Requires PHP:       7.4  
-Requires EAC:       3.1  
 Contributors:       [kevinburkholder](https://profiles.wordpress.org/kevinburkholder)  
 License:            GPLv3 or later  
 License URI:        https://www.gnu.org/licenses/gpl.html  
@@ -185,6 +184,16 @@ _\*  More often than not, unexpired objects are updated when the source data has
 
 * * *
 
++   To set the default expiration time (in seconds) by group:
+
+```
+    define( 'EAC_OBJECT_CACHE_GROUP_EXPIRE', array( 'group' => -1|0|int, ... ) );
+```
+
+This option allows for setting the expiration time for specific object groups. See also `wp_cache_add_group_expire( $groups )`.
+
+* * *
+
 +   To enable or disable pre-fetching of cache misses           (default: true [enabled]):
 
 ```
@@ -265,8 +274,8 @@ Pre-fetching a group of records may be much faster than loading each key individ
 +   To disable the importing and/or exporting of transients:
 
 ```
-	define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_IMPORT, true );
-	define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_EXPORT, true );
+    define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_IMPORT, true );
+    define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_EXPORT, true );
 ```
 
 #### Utility methods
@@ -399,6 +408,8 @@ wp_cache_add_permanent_groups( $groups )
 
 wp_cache_add_prefetch_groups( $groups )
 
+wp_cache_add_group_expire( $groups )
+
 [wp_cache_switch_to_blog](https://developer.wordpress.org/reference/functions/wp_cache_switch_to_blog/)( $blog_id )
 
 
@@ -444,6 +455,20 @@ wp_cache_add_prefetch_groups( $groups )
     if ( ! $result = wp_cache_get('my_query_result','my_query_group:sitewide') ) {
         $result = $wpdb->query( $wpdb->prepare( 'SELECT...' ) );
         wp_cache_set( 'my_query_result', $result, 'my_query_group:sitewide', DAY_IN_SECONDS );
+    }
+
+    /*
+     * set a default expiration time by group
+     */
+    if (wp_cache_supports( 'group_expire' )) {
+        wp_cache_add_group_expire( [ 
+            'comment-queries'       => WEEK_IN_SECONDS,
+            'site-queries'          => WEEK_IN_SECONDS,
+            'network-queries'       => WEEK_IN_SECONDS,
+            'post-queries'          => WEEK_IN_SECONDS,
+            'term-queries'          => WEEK_IN_SECONDS,
+            'user-queries'          => WEEK_IN_SECONDS,
+        ] );
     }
 ```
 

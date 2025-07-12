@@ -11,7 +11,7 @@
  * @author Kevin Burkholder <KBurkholder@EarthAsylum.com>
  * @link https://eacdoojigger.earthasylum.com/eacobjectcache/
  *
- * @version 25.0407.1
+ * @version 25.0712.1
  *
  */
 
@@ -28,7 +28,7 @@ defined( 'EAC_OBJECT_CACHE_VERSION' ) || exit;
 function wp_cache_init() {
 	global $wp_object_cache;
 
-	if (!isset($wp_object_cache) || !is_a($wp_object_cache,'\WP_Object_Cache')) {
+	if (!isset($wp_object_cache) || !($wp_object_cache instanceof \WP_Object_Cache)) {
 		$wp_object_cache = new \WP_Object_Cache();
 		// because we may pull transients, which uses wp-cache, we must be instantiated
 		$wp_object_cache->init();
@@ -212,7 +212,7 @@ function wp_cache_get_multiple( $keys, $group = '', $force = false ) {
 /**
  * Retrieves all values for a group from the cache in one call.
  *
- * Before calling this function, always check for group delete support using the
+ * Before calling this function, always check for support using the
  * `wp_cache_supports( 'get_group' )` function.
  *
  * @see WP_Object_Cache::get_group()
@@ -414,6 +414,7 @@ function wp_cache_supports( $feature ) {
 		case 'flush_blog':
 		case 'prefetch_groups':
 		case 'permanent_groups':
+		case 'group_expire':
 			return true;
 
 		default:
@@ -489,6 +490,20 @@ function wp_cache_add_prefetch_groups( $groups ) {
 	global $wp_object_cache;
 
 	$wp_object_cache->add_prefetch_groups( $groups );
+}
+
+/**
+ * Non-Standard - Adds group expiration/ttl
+ *
+ * Before calling this function, always check for support using the
+ * `wp_cache_supports( 'group_expire' )` function.
+ *
+ * @param array $groups group => ttl.
+ */
+function wp_cache_add_group_expire( $groups ) {
+	global $wp_object_cache;
+
+	$wp_object_cache->add_group_expire( $groups );
 }
 
 /**

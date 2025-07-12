@@ -1,12 +1,11 @@
 === {eac}ObjectCache - a persistent object cache using a SQLite database to cache WordPress objects. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         1.4.0
-Last Updated:       27-Jun-2025
+Stable tag:         1.4.1
+Last Updated:       12-Jul-2025
 Requires at least:  5.8
 Tested up to:       6.8
 Requires PHP:       7.4
-Requires EAC:       3.1
 Contributors:       kevinburkholder
 License:            GPLv3 or later
 License URI:        https://www.gnu.org/licenses/gpl.html
@@ -174,6 +173,16 @@ When using the default WordPress object cache, object expiration isn't very impo
 _\*  Transients with no expiration overide this setting and are allowed (as that is the normal WordPress functionality)._
 
 _\*  More often than not, unexpired objects are updated when the source data has changed and do not present any issues._
+
+* * *
+
++   To set the default expiration time (in seconds) by group:
+
+```
+    define( 'EAC_OBJECT_CACHE_GROUP_EXPIRE', array( 'group' => -1|0|int, ... ) );
+```
+
+This option allows for setting the expiration time for specific object groups. See also `wp_cache_add_group_expire( $groups )`.
 
 * * *
 
@@ -391,6 +400,8 @@ wp_cache_add_permanent_groups( $groups )
 
 wp_cache_add_prefetch_groups( $groups )
 
+wp_cache_add_group_expire( $groups )
+
 [wp_cache_switch_to_blog](https://developer.wordpress.org/reference/functions/wp_cache_switch_to_blog/)( $blog_id )
 
 
@@ -436,6 +447,20 @@ wp_cache_add_prefetch_groups( $groups )
     if ( ! $result = wp_cache_get('my_query_result','my_query_group:sitewide') ) {
         $result = $wpdb->query( $wpdb->prepare( 'SELECT...' ) );
         wp_cache_set( 'my_query_result', $result, 'my_query_group:sitewide', DAY_IN_SECONDS );
+    }
+
+    /*
+     * set a default expiration time by group
+     */
+    if (wp_cache_supports( 'group_expire' )) {
+        wp_cache_add_group_expire( [ 
+            'comment-queries'		=> WEEK_IN_SECONDS,
+            'site-queries'			=> WEEK_IN_SECONDS,
+            'network-queries'		=> WEEK_IN_SECONDS,
+            'post-queries'			=> WEEK_IN_SECONDS,
+            'term-queries'			=> WEEK_IN_SECONDS,
+            'user-queries'			=> WEEK_IN_SECONDS,
+        ] );
     }
 ```
 
@@ -510,6 +535,14 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 1.4.1 – July 12, 2025 =
+
++   Implemented `cache_clear_query_groups()` on `wp_cache_set_last_changed` hook to invalidate group cache for query groups.
+    +   See https://make.wordpress.org/core/2023/07/17/improvements-to-the-cache-api-in-wordpress-6-3/
++   New `wp_cache_add_group_expire( $groups )` to set default ttl by group.
++   New `EAC_OBJECT_CACHE_GROUP_EXPIRE` to set default ttl by group.
++   Use `instanceof` instead of `is_a()` when checking `WP_Object_Cache`.
 
 = Version 1.4.0 – June 27, 2025 =
 

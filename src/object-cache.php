@@ -4,7 +4,7 @@
  *
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.4.0
+ * Version:				1.4.1
  * Requires at least:	5.8
  * Tested up to:		6.8
  * Requires PHP:		7.4
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE_VERSION','1.4.0');
+define('EAC_OBJECT_CACHE_VERSION','1.4.1');
 
 /**
  * Derived from WordPress core WP_Object_Cache (wp-includes/class-wp-object-cache.php)
@@ -154,6 +154,7 @@ class WP_Object_Cache
 	 * -1 = don't cache (non-persistent), 0 = no expiration, int = seconds to expiration
 	 *
 	 * Set with: EAC_OBJECT_CACHE_DEFAULT_EXPIRE, $wp_object_cache->default_expire = n
+	 * See $group_expire (expire by group)
 	 *
 	 * @var int
 	 */
@@ -274,6 +275,24 @@ class WP_Object_Cache
 	);
 
 	/**
+	 * If expiration is not set, use this time integer for the group.
+	 * -1 = don't cache (non-persistent), 0 = no expiration, int = seconds to expiration
+	 *
+	 * Set with: EAC_OBJECT_CACHE_GROUP_EXPIRE, wp_cache_add_group_expire( [...] )
+	 * See $default_expire and cache_clear_query_groups()
+	 *
+	 * @var int
+	 */
+	public $group_expire		= array( // these query groups have no expiration
+	//	'comment-queries'		=> WEEK_IN_SECONDS,
+	//	'site-queries'			=> WEEK_IN_SECONDS,
+	//	'network-queries'		=> WEEK_IN_SECONDS,
+	//	'post-queries'			=> WEEK_IN_SECONDS,
+	//	'term-queries'			=> WEEK_IN_SECONDS,
+	//	'user-queries'			=> WEEK_IN_SECONDS,
+	);
+
+	/**
 	 * Holds the cached objects (group => [key => [value=>,expire=>] | false]).
 	 *	false = tried but not in persistent cache, don't try again.
 	 *
@@ -391,6 +410,7 @@ class WP_Object_Cache
 		// because these are non-standard methods, nothing outside calls them
 		$this->add_permanent_groups();
 		$this->add_prefetch_groups();
+		$this->add_group_expire();
 	}
 
 
@@ -404,6 +424,8 @@ class WP_Object_Cache
 		if (! $this->is_multisite) {
 			$this->switch_to_blog( get_current_blog_id() );
 		}
+
+		add_action( 'wp_cache_set_last_changed', [$this,'cache_clear_query_groups'] );
 
 		if (is_admin())
 		{
@@ -530,6 +552,35 @@ class WP_Object_Cache
 		if ( ! $this->db ) return false;
 
 		return ($install) ? $this->install($cacheName) : true;
+	}
+
+
+	/**
+	 * Clear expired query groups on wp_cache_set_last_changed
+	 *
+	 * @see https://make.wordpress.org/core/2023/07/17/improvements-to-the-cache-api-in-wordpress-6-3/
+	 * @param string $group
+	 */
+	public function cache_clear_query_groups( $group )
+	{
+		static $stmt = null;
+		if (is_null($stmt)) {
+			$stmt = $this->db->prepare("DELETE FROM wp_cache WHERE key LIKE :group;");
+		}
+
+		$cache_group = rtrim($group,'s').'-queries';
+
+		$blogkey = $this->get_valid_key('%',$cache_group);
+		try {
+			$this->db->beginTransaction();
+			$stmt->execute( ['group' => $cache_group.'|'.$blogkey] );
+			$this->addStats('L2 deletes',$stmt->rowCount());
+			$this->db->commit();
+			$this->addStats('L2 commits',1);
+		} catch ( Exception $ex ) {
+			$this->db->rollBack();
+			$this->error_log(__METHOD__,$ex);
+		}
 	}
 
 
@@ -1038,7 +1089,7 @@ class WP_Object_Cache
 		// set default expiration time - transients (perm_groups) don't expire unless explicitly set
 		$expire = (!empty($expire))
 			? (int)$expire
-			: ($this->is_permanent_group($group) ? 0 : $this->default_expire);
+			: ($this->is_permanent_group($group) ? 0 : ($this->group_expire[$group] ?? $this->default_expire));
 
 		// value has not changed
 		if ( ($this->key_exists_memory( $blogkey, $group ) > 0)
@@ -1647,6 +1698,23 @@ class WP_Object_Cache
 
 		$this->set('prefetch_groups', $this->prefetch_groups, self::GROUP_ID, 0);
 		return $this->prefetch_groups;
+	}
+
+
+	/**
+	 * Sets the list of group expirations.
+	 *
+	 * @param array $groups [group => expires]
+	 * @return array [group=>expires,...]
+	 */
+	public function add_group_expire( $groups = [] ): array
+	{
+		// EAC_OBJECT_CACHE_GROUP_EXPIRE
+		$defined_groups = $this->get_defined_option("group_expire", 'is_array') ?? [];
+
+		$this->group_expire = array_merge( $this->group_expire, $defined_groups, $groups );
+
+		return $this->group_expire;
 	}
 
 
