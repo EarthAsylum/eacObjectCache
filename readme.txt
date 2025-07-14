@@ -7,6 +7,7 @@ Requires at least:  5.8
 Tested up to:       6.8
 Requires PHP:       7.4
 Contributors:       kevinburkholder
+Donate link:        https://github.com/sponsors/EarthAsylum
 License:            GPLv3 or later
 License URI:        https://www.gnu.org/licenses/gpl.html
 Tags:               persistent object cache, object cache, wp cache, sqlite, performance, {eac}Doojigger,
@@ -17,7 +18,7 @@ GitHub URI:         https://github.com/EarthAsylum/eacObjectCache
 
 == Description ==
 
-The _{eac}Doojigger Object Cache_ ({eac}ObjectCache) is a light-weight and very efficient drop-in persistent object cache that uses a fast SQLite database to cache WordPress objects.
+The _{eac}ObjectCache_ is a light-weight and very efficient drop-in persistent object cache that uses a fast SQLite database to cache WordPress objects.
 
 See [The WordPress Object Cache](https://developer.wordpress.org/reference/classes/wp_object_cache/)
 
@@ -172,17 +173,19 @@ When using the default WordPress object cache, object expiration isn't very impo
 
 _\*  Transients with no expiration overide this setting and are allowed (as that is the normal WordPress functionality)._
 
-_\*  More often than not, unexpired objects are updated when the source data has changed and do not present any issues._
+_\*  Usually, but not always, unexpired objects are updated when the source data has changed and do not present any issues._
 
 * * *
 
-+   To set the default expiration time (in seconds) by group:
++   To set the default expiration time (in seconds) by group name:
 
 ```
     define( 'EAC_OBJECT_CACHE_GROUP_EXPIRE', array( 'group' => -1|0|int, ... ) );
 ```
 
-This option allows for setting the expiration time for specific object groups. See also `wp_cache_add_group_expire( $groups )`.
+This option allows for setting the expiration time for specific object groups.
+
+See also `wp_cache_add_group_expire( $groups )`.
 
 * * *
 
@@ -266,8 +269,8 @@ Pre-fetching a group of records may be much faster than loading each key individ
 +   To disable the importing and/or exporting of transients:
 
 ```
-	define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_IMPORT, true );
-	define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_EXPORT, true );
+	define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_IMPORT', true );
+	define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_EXPORT', true );
 ```
 
 = Utility methods =
@@ -469,9 +472,9 @@ wp_cache_add_group_expire( $groups )
 
 *{eac}ObjectCache* is an extension plugin to and is fully functional with installation and registration of [{eac}Doojigger](https://eacDoojigger.earthasylum.com/).
 
-However, the core `object-cache.php` file may be installed without {eac}Doojigger (referred to as 'detached' mode).
+However, the core *object-cache.php* file may be installed without {eac}Doojigger (referred to as 'detached' mode).
 
-In detached mode, the plugin will attempt to copy the `object-cache.php` file to the `/wp-content` folder on activation, or you may manually copy the `object-cache.php` file from the plugin `/src` folder to the `/wp-content` folder to activate. Options can then be set using the documented PHP constants in the `wp-config.php` file.
+In detached mode, the plugin will attempt to copy the *object-cache.php* file to the `/wp-content` folder on activation, or you may manually copy the *object-cache.php* file from the plugin `/src` folder to the `/wp-content` folder to activate. Options can then be set using the documented PHP constants in the `wp-config.php` file.
 
 = Automatic Plugin Installation =
 
@@ -514,9 +517,9 @@ Once installed and activated, options for this extension will show in the 'Objec
 
 *{eac}ObjectCache* is an extension plugin to and is fully functional with installation and registration of [{eac}Doojigger](https://eacDoojigger.earthasylum.com/).
 
-However, the core `object-cache.php` file may be installed without {eac}Doojigger - referred to as 'detached' mode.
+However, the core *object-cache.php* file may be installed without {eac}Doojigger - referred to as 'detached' mode.
 
-In detached mode, the plugin will attempt to copy the `object-cache.php` file to the `/wp-content` folder on activation, or you may manually copy the `object-cache.php` file from the plugin `/src` folder to the `/wp-content` folder to activate. Options can then be set using the documented PHP constants in the `wp-config.php` file.
+In detached mode, the plugin will attempt to copy the *object-cache.php* file to the `/wp-content` folder on activation, or you may manually copy the *object-cache.php* file from the plugin `/src` folder to the `/wp-content` folder to activate. Options can then be set using the documented PHP constants in the `wp-config.php` file.
 
 = See Also =
 
