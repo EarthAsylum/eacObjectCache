@@ -1,10 +1,10 @@
 <?php
 /**
- * {eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in.
+ * {eac}Doojigger Object Cache - SQLite and APCu powered WP_Object_Cache Drop-in
  *
  * Plugin Name:			{eac}ObjectCache
- * Description:			{eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in
- * Version:				1.4.1
+ * Description:			{eac}Doojigger Object Cache - SQLite and APCu powered WP_Object_Cache Drop-in
+ * Version:				2.0.0
  * Requires at least:	5.8
  * Tested up to:		6.8
  * Requires PHP:		7.4
@@ -15,17 +15,25 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE_VERSION','1.4.1');
+define('EAC_OBJECT_CACHE_VERSION','2.0.0');
 
 /**
  * Derived from WordPress core WP_Object_Cache (wp-includes/class-wp-object-cache.php)
- *
  *
  * {eac}ObjectCache is an extension plugin to and is fully functional with installation and registration of
  * {eac}Doojigger (see: https://eacDoojigger.earthasylum.com/).
  *
  * However, the core 'object-cache.php' file may be installed without {eac}Doojigger - referred to as 'detached' mode.
- * -
+ *
+ * - - -
+ *
+ * To disable use of SQLite database
+ *
+ * 		define( 'EAC_OBJECT_CACHE_USE_DB', false );
+ *
+ * To disable use of APCu memory
+ *
+ * 		define( 'EAC_OBJECT_CACHE_USE_APCU', false );
  *
  * To prevent outside actors from flushing caches.
  *
@@ -34,93 +42,89 @@ define('EAC_OBJECT_CACHE_VERSION','1.4.1');
  * 		define( 'EAC_OBJECT_CACHE_DISABLE_GROUP_FLUSH', true );
  * 		define( 'EAC_OBJECT_CACHE_DISABLE_BLOG_FLUSH', true );
  * 		define( 'EAC_OBJECT_CACHE_DISABLE_RUNTIME_FLUSH', true );
- *
- * To prevent transient import/export.
- *
- * 		define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_IMPORT, true );
- * 		define( 'EAC_OBJECT_CACHE_DISABLE_TRANSIENT_EXPORT, true );
  */
 
 
 class WP_Object_Cache
 {
 	/**
-	 * This plugin id
+	 * This plugin id.
 	 *
 	 * @var string
 	 */
-	const PLUGIN_NAME			= '{eac}ObjectCache';
+	public const PLUGIN_NAME			= '{eac}ObjectCache';
 
 	/**
-	 * Internal group id
+	 * Internal group id.
 	 *
 	 * @var string
 	 */
-	const GROUP_ID				= '@object-cache';
-	const GROUP_ID_GLOBAL		= '@object-cache-global';
+	private const GROUP_ID				= '@object-cache';
+	private const GROUP_ID_GLOBAL		= '@object-cache-global';
+	private const GROUP_ID_NP			= '@object-cache-np';
 
 	/**
-	 * Path name to cache folder
+	 * Path name to cache folder.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_DIR
 	 *
 	 * @var string
 	 */
-	private $cache_dir			= WP_CONTENT_DIR.'/cache';
+	private string $cache_dir			= WP_CONTENT_DIR.'/cache';
 
 	/**
-	 * Name of cache file
+	 * Name of cache file.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_FILE
 	 *
 	 * @var string
 	 */
-	private $cache_file			= '.eac_object_cache.sqlite';
+	private string $cache_file			= '.eac_object_cache.sqlite';
 
 	/**
-	 * SQLite journal mode
+	 * SQLite journal mode.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_JOURNAL_MODE
 	 *
 	 * @var string
 	 */
-	private $journal_mode		= 'WAL';
+	private string $journal_mode		= 'WAL';
 
 	/**
-	 * SQLite timeout in seconds
+	 * SQLite timeout in seconds.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_TIMEOUT
 	 *
 	 * @var int
 	 */
-	private $timeout			= 3;
+	private int $timeout				= 3;
 
 	/**
-	 * SQLite mapped memory I/O
+	 * SQLite mapped memory I/O.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_MMAP_SIZE
 	 *
 	 * @var int
 	 */
-	private $mmap_size			= 0;
+	private int $mmap_size				= 0;
 
 	/**
-	 * SQLite page size
+	 * SQLite page size.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_PAGE_SIZE
 	 *
 	 * @var int
 	 */
-	private $page_size			= 4096;
+	private int $page_size				= 4096;
 
 	/**
-	 * SQLite cache size
+	 * SQLite cache size.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_CACHE_SIZE
 	 *
 	 * @var int
 	 */
-	private $cache_size			= -2000;
+	private int $cache_size				= -2000;
 
 	/**
 	 * SQL (open/write/delete) retries.
@@ -129,7 +133,7 @@ class WP_Object_Cache
 	 *
 	 * @var int
 	 */
-	public $max_retries			= 3;
+	public int $max_retries				= 3;
 
 	/**
 	 * Sleep between retries (micro-seconds) 1/10-second.
@@ -138,16 +142,16 @@ class WP_Object_Cache
 	 *
 	 * @var int
 	 */
-	public $sleep_time			= 100000;
+	public int $sleep_time				= 100000;
 
 	/**
-	 * Use delayed writes until shutdown or n records
+	 * Use delayed writes until shutdown or n records.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_DELAYED_WRITES, $wp_object_cache->delayed_writes = n
 	 *
 	 * @var bool|int
 	 */
-	public $delayed_writes		= 32;
+	public $delayed_writes				= 32;
 
 	/**
 	 * If expiration is not set, use this time integer.
@@ -158,34 +162,34 @@ class WP_Object_Cache
 	 *
 	 * @var int
 	 */
-	public $default_expire		= 0;
+	public int $default_expire			= 0;
 
 	/**
-	 * Pre-fetch cache misses
+	 * Pre-fetch cache misses.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_PREFETCH_MISSES
 	 *
 	 * @var bool
 	 */
-	private $prefetch_misses 	= true;
+	private bool $prefetch_misses 		= true;
 
 	/**
-	 * The probablity of running maintenance functions
+	 * The probablity of running maintenance functions.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_PROBABILITY, $wp_object_cache->probability = n
 	 *
 	 * @var int
 	 */
-	public $probability			= 1000;
+	public int $probability				= 1000;
 
 	/**
-	 * List of actions or filters that trigger an immediate cache write (overrides $delayed_writes)
+	 * List of actions or filters that disable $delayed_writes.
 	 *
 	 * Set with: EAC_OBJECT_CACHE_WRITE_HOOKS, $wp_object_cache->write_hooks = [...]
 	 *
 	 * @var string[]
 	 */
-	public $write_hooks 		= array(
+	public array $write_hooks 			= array(
 		'cron_request',								// when preparing to spawn a cron request
 		'updated_option_cron',						// after updating cron schedule
 		'set_transient_doing_cron',					// after setting the doing_cron transient
@@ -200,7 +204,16 @@ class WP_Object_Cache
 	 *
 	 * @var int
 	 */
-	public $display_stats		= 0;
+	public int $display_stats			= 0;
+
+	/**
+	 * Log stats in eacDoojigger log & Query Monitor action.
+	 *
+	 * Set with: $wp_object_cache->log_stats = false|true
+	 *
+	 * @var bool
+	 */
+	public bool $log_stats				= false;
 
 	/**
 	 * Display errors in an admin notice.
@@ -209,40 +222,46 @@ class WP_Object_Cache
 	 *
 	 * @var bool
 	 */
-	public $display_errors		= false;
+	public bool $display_errors			= false;
 
 	/**
-	 * Log errors in eacDoojigger log.
+	 * Log errors in eacDoojigger log & Query Monitor action.
 	 *
 	 * Set with: $wp_object_cache->log_errors = false|true
 	 *
 	 * @var bool
 	 */
-	public $log_errors			= false;
+	public bool $log_errors				= false;
 
 	/**
 	 * List of global/site-wide cache groups (or any group with ':sitewide' suffix).
 	 * Although there is no standard way to set ':prefetch' or ':nocaching' on a transient, we do allow for it.
 	 * Whereas ':permanent',':sitewide' don't make sense.
 	 *
+	 * WordPress core adds default global groups.
+	 *
 	 * Set with: EAC_OBJECT_CACHE_GLOBAL_GROUPS, wp_cache_add_global_groups( [...] )
 	 *
 	 * @var [string => bool]
 	 */
-	private $global_groups		= array(
-		self::GROUP_ID_GLOBAL	=> true,
-		'site-transient:prefetch' => true,
-		'site-transient:nocaching' => true,
+	private array $global_groups		= array(
+		self::GROUP_ID_GLOBAL		=> true,
+		'site-transient:prefetch' 	=> true,
+		'site-transient:nocaching' 	=> true,
 	);
 
 	/**
 	 * List of non-persistent cache groups (or any group with ':nocaching' suffix).
 	 *
+	 * WordPress core adds default non-persistent groups.
+	 *
 	 * Set with: EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS, wp_cache_add_non_persistent_groups( [...] )
 	 *
 	 * @var [string => bool]
 	 */
-	private $nonp_groups		= array();
+	private array $nonp_groups			= array(
+		self::GROUP_ID_NP			=> true,
+	);
 
 	/**
 	 * List of permanent cache groups, no expiration required (or any group with ':permanent' suffix).
@@ -253,13 +272,13 @@ class WP_Object_Cache
 	 *
 	 * @var [string => bool]
 	 */
-	private $perm_groups		= array(
-		self::GROUP_ID			=> true,
-		self::GROUP_ID_GLOBAL	=> true,
-		'transient'				=> true,
-		'transient:prefetch'	=> true,
-		'site-transient'		=> true,
-		'site-transient:prefetch' => true,
+	private array $perm_groups			= array(
+		self::GROUP_ID				=> true,
+		self::GROUP_ID_GLOBAL		=> true,
+		'transient'					=> true,
+		'transient:prefetch'		=> true,
+		'site-transient'			=> true,
+		'site-transient:prefetch' 	=> true,
 	);
 
 	/**
@@ -269,9 +288,9 @@ class WP_Object_Cache
 	 *
 	 * @var [string => bool]
 	 */
-	private $prefetch_groups 	= array(
-		self::GROUP_ID			=> true,
-		self::GROUP_ID_GLOBAL	=> true,
+	private array $prefetch_groups 		= array(
+		self::GROUP_ID				=> true,
+		self::GROUP_ID_GLOBAL		=> true,
 	);
 
 	/**
@@ -281,15 +300,16 @@ class WP_Object_Cache
 	 * Set with: EAC_OBJECT_CACHE_GROUP_EXPIRE, wp_cache_add_group_expire( [...] )
 	 * See $default_expire and cache_clear_query_groups()
 	 *
-	 * @var int
+	 * @var [string => int]
 	 */
-	public $group_expire		= array( // these query groups have no expiration
-	//	'comment-queries'		=> WEEK_IN_SECONDS,
-	//	'site-queries'			=> WEEK_IN_SECONDS,
-	//	'network-queries'		=> WEEK_IN_SECONDS,
-	//	'post-queries'			=> WEEK_IN_SECONDS,
-	//	'term-queries'			=> WEEK_IN_SECONDS,
-	//	'user-queries'			=> WEEK_IN_SECONDS,
+	public array $group_expire			= array(
+	// these query groups have no expiration
+	//	'comment-queries'			=> WEEK_IN_SECONDS,
+	//	'site-queries'				=> WEEK_IN_SECONDS,
+	//	'network-queries'			=> WEEK_IN_SECONDS,
+	//	'post-queries'				=> WEEK_IN_SECONDS,
+	//	'term-queries'				=> WEEK_IN_SECONDS,
+	//	'user-queries'				=> WEEK_IN_SECONDS,
 	);
 
 	/**
@@ -298,7 +318,7 @@ class WP_Object_Cache
 	 *
 	 * @var array
 	 */
-	private $L1_cache			= array();
+	private array $L1_cache				= array();
 
 	/**
 	 * Holds db writes objects (group => [key => expire | false]).
@@ -306,51 +326,81 @@ class WP_Object_Cache
 	 *
 	 * @var array
 	 */
-	private $L2_cache			= array();
+	private array $L2_cache				= array();
 
 	/**
-	 * Memory/persistent cache stats
+	 * Holds the currently found/selected object ([value=>,expire=>] | false).
 	 *
-	 * @var int[]
+	 * @var mixed
 	 */
-	private $cache_stats		= array(
-		'cache hits'			=> 0,	// total cache hits (memory & db)
-		'cache misses'			=> 0,	// total cache misses (memory & db)
-		'L1 cache hits'			=> 0,	// cache hits in memory
-		'L1 cache (+)'			=> 0,	// in memory with data
-		'L1 cache (-)'			=> 0,	// in memory, no data
-		'L1 cache misses'		=> 0,	// cache misses in memory
-		'L2 cache hits'			=> 0,	// cache hits from sqlite
-		'L2 cache misses'		=> 0,	// cache misses from sqlite
-		'L2 pre-fetched (+)'	=> 0,	// records pre-fetched by group
-		'L2 pre-fetched (-)'	=> 0,	// misses pre-fetched by group
-		'L2 selects'			=> 0,	// number of sql selects
-		'L2 updates'			=> 0,	// number of records updated
-		'L2 deletes'			=> 0,	// number of records deleted
-		'L2 commits'			=> 0,	// number of sql transaction commits
+	private $current					= null;
+
+	/**
+	 * The row count of the current/last select
+	 *
+	 * @var int
+	 */
+	private int $select_count			= 0;
+
+	/**
+	 * When using APCu, save memory by not storing APCu data in L1_cache.
+	 * Slight increase in processing as most cache hits will come through APCu.
+	 *
+	 * Set with: EAC_OBJECT_CACHE_OPTIMIZE_MEMORY, $wp_object_cache->optimize_memory = false|true
+	 *
+	 * @var bool
+	 */
+	public bool $optimize_memory		= false;
+
+	/**
+	 * Memory/persistent cache stats.
+	 *
+	 * @var [string => int]
+	 */
+	private array $stats_runtime		= array(
+		'cache hits'				=> 0,	// total cache hits (memory & db)
+		'cache misses'				=> 0,	// total cache misses (memory & db)
+		'L1 cache hits'				=> 0,	// cache hits in memory
+		'L1 cache (+)'				=> 0,	// in memory with data
+		'L1 cache (-)'				=> 0,	// in memory, no data (L2 miss)
+		'L1 cache misses'			=> 0,	// cache misses in memory
+		'L2 non-persistent'			=> 0,	// not read from L2
+		'L2 APCu hits'				=> 0, 	// APCu cache hits
+		'L2 APCu (+)'				=> 0,	// in memory with data
+		'L2 APCu (-)'				=> 0,	// in memory, no data (L2 miss)
+		'L2 APCu misses'			=> 0, 	// APCu cache misses
+		'L2 SQL hits'				=> 0,	// cache hits from sqlite
+		'L2 SQL misses'				=> 0,	// cache misses from sqlite
+		'L2 APCu updates'			=> 0, 	// APCu cache adds
+		'L2 APCu deletes'			=> 0, 	// APCu cache deletes
+		'L2 SQL selects'			=> 0,	// number of sql selects
+		'L2 SQL updates'			=> 0,	// number of records updated
+		'L2 SQL deletes'			=> 0,	// number of records deleted
+		'L2 SQL commits'			=> 0,	// number of sql transaction commits
+		'pre-fetched (+)'			=> 0,	// records pre-fetched by group
+		'pre-fetched (-)'			=> 0,	// misses pre-fetched by group
 	);
 
 	/**
-	 * Cache hits by group ([group => count])
+	 * Cache hits by group ([group => count]).
 	 *
-	 * @var int[]
+	 * @var [string => int]
 	 */
-	private $group_stats		= array();
+	private array $stats_groups			= array();
 
 	/**
-	 * Count L2 pre-fetched misses by blog id ([id => count])
-	 * used for $cache_stats['L2 pre-fetched (-)']
+	 * Pre-fetch misses by blog ([blog_id => count]).
 	 *
-	 * @var int[]
+	 * @var [int => int]
 	 */
-	private $L2_missed_stats 	= array();
+	private array $stats_premissed		= array();
 
 	/**
 	 * Recommended style for stats html table.
 	 *
 	 * @var string
 	 */
-	public $statsCSS			=
+	public string $statsCSS				=
 		"table.wp-object-cache th {text-align: left; font-weight: normal;}".
 		"table.wp-object-cache th p {font-weight: bold;}".
 		"table.wp-object-cache td {text-align: right; padding-left: 1em;}";
@@ -360,28 +410,35 @@ class WP_Object_Cache
 	 *
 	 * @var int
 	 */
-	private $time_now;
+	private int $time_now				= 0;
 
 	/**
 	 * Holds the value of is_multisite().
 	 *
 	 * @var bool
 	 */
-	private $is_multisite		= false;
+	private bool $is_multisite			= false;
 
 	/**
 	 * The blog prefix to prepend to keys in non-global groups.
 	 *
 	 * @var int
 	 */
-	private $blog_id			= 0;
+	private int $blog_id				= 0;
 
 	/**
-	 * The SQLite database object.
+	 * The SQLite database object (or false).
 	 *
-	 * @var object
+	 * @var bool|object
 	 */
-	private $db;
+	private $use_db 					= true;
+
+	/**
+	 * Use APCu memory key prefix (or false).
+	 *
+	 * @var bool|string
+	 */
+	private $use_apcu					= true;
 
 
 	/*
@@ -396,16 +453,15 @@ class WP_Object_Cache
 	 */
 	public function __construct()
 	{
-		$this->time_now 	= time();
-		$this->is_multisite = is_multisite();
+		$this->time_now 		= time();
+		$this->is_multisite 	= is_multisite();
 
 		$this->get_defined_options();
 
-		// we can still function as a memory-only cache on failure
-		if (! $this->connect_sqlite() ) {
-			$this->delete_cache_file();
-			$this->connect_sqlite();
-		}
+		$this->use_apcu 		= $this->connect_apcu();
+		$this->optimize_memory 	= ($this->optimize_memory && $this->use_apcu);
+
+		$this->use_db 			= $this->connect_sqlite();
 
 		// because these are non-standard methods, nothing outside calls them
 		$this->add_permanent_groups();
@@ -413,9 +469,8 @@ class WP_Object_Cache
 		$this->add_group_expire();
 	}
 
-
 	/**
-	 * Initialize, sets current blog id (imports transients).
+	 * Initialize, sets current blog id and WP actions.
 	 * Called from wp_cache_init();
 	 *
 	 */
@@ -435,8 +490,8 @@ class WP_Object_Cache
 					if ($this->display_stats) {
 						echo "\n<style>".esc_html($this->statsCSS)."</style>\n";
 						echo "<div class='object-cache-notice notice notice-info'>";
-						echo "<details><summary>Object Cache...</summary>";
-						$this->htmlStats( (bool)$this->display_stats );
+						echo "<details><summary>Object Cache Stats...</summary>";
+						$this->htmlStats( true, ($this->display_stats) );
 						echo "</details></div>\n";
 					}
 				},PHP_INT_MAX - 100
@@ -446,7 +501,9 @@ class WP_Object_Cache
 		add_action( 'shutdown', function()
 			{
 				// for Query Monitor/eacDoojigger logging
-				$this->getStatsCache(true);
+				if ($this->log_stats) {
+					$this->getStatsCache(true);
+				}
 			},8 // before qm (9)
 		);
 	}
@@ -473,6 +530,9 @@ class WP_Object_Cache
 			['prefetch_misses', 'is_bool'],		// pre-fetch cache misses (bool)
 			['probability', 	'is_int'],		// maintenance/sampling probability (int)
 			['write_hooks', 	'is_array'],	// hooks that trigger an immediate cache write
+			['optimize_memory', 'is_bool'],		// optimize memory
+			['use_apcu', 		'is_bool'],		// disable APCu
+			['use_db', 			'is_bool'],		// disable SQLite db
 		) as $option) {
 			$this->get_defined_option(...$option);
 		}
@@ -516,23 +576,51 @@ class WP_Object_Cache
 
 
 	/**
+	 * Initialize APCu key based on SQLite cache location.
+	 *
+	 * @reurn string|bool APCu key prefix or false
+	 */
+	private function connect_apcu()
+	{
+		$this->use_apcu = ($this->use_apcu && function_exists('apcu_enabled') && apcu_enabled());
+		if ( ! $this->use_apcu ) return false;
+
+		$cacheName	= trailingslashit($this->cache_dir);
+
+		$apcu_cache_ids  = apcu_fetch('WPOC_CACHE_IDS') ?: [];
+
+		$apcu_key = array_search($cacheName, $apcu_cache_ids);
+		if ($apcu_key === false) {
+			$apcu_cache_ids[] = $cacheName;
+			$apcu_key = key($apcu_cache_ids);
+			apcu_store('WPOC_CACHE_IDS',$apcu_cache_ids);
+		}
+
+		return 'WPOC'.(string)$apcu_key;
+	}
+
+
+	/**
 	 * open the SQLite database connection
 	 *
 	 */
-	private function connect_sqlite(): bool
+	private function connect_sqlite()
 	{
+		$this->use_db = ($this->use_db && extension_loaded('pdo_sqlite'));
+		if ( ! $this->use_db ) return false;
+
 		$cacheName	= trailingslashit($this->cache_dir) . $this->cache_file;
 		$install	= !file_exists($cacheName);
 
 		$retries = 0;
 		while ( ++$retries <= $this->max_retries ) {
 			try {
-				$this->db = new \PDO("sqlite:{$cacheName}",null,null,[
+				$this->use_db = new \PDO("sqlite:{$cacheName}",null,null,[
 					PDO::ATTR_TIMEOUT				=> $this->timeout,
 					PDO::ATTR_ERRMODE				=> PDO::ERRMODE_EXCEPTION,
 					PDO::ATTR_DEFAULT_FETCH_MODE	=> PDO::FETCH_ASSOC,
 				]);
-				$this->db->exec("
+				$this->use_db->exec("
 					PRAGMA encoding = 'UTF-8';
 					PRAGMA synchronous = NORMAL;
 					PRAGMA auto_vacuum = INCREMENTAL;
@@ -544,14 +632,16 @@ class WP_Object_Cache
 				break;
 			} catch ( Exception $ex ) {
 				\error_log(__METHOD__.': '.$ex->getCode().' '.$ex->getMessage());
-				$this->db = null;
+				$this->use_db = false;
 				usleep($this->sleep_time);
 			}
 		}
 
-		if ( ! $this->db ) return false;
+		if ($this->use_db && $install) {
+			$this->install($cacheName);
+		}
 
-		return ($install) ? $this->install($cacheName) : true;
+		return $this->use_db;
 	}
 
 
@@ -563,24 +653,8 @@ class WP_Object_Cache
 	 */
 	public function cache_clear_query_groups( $group )
 	{
-		static $stmt = null;
-		if (is_null($stmt)) {
-			$stmt = $this->db->prepare("DELETE FROM wp_cache WHERE key LIKE :group;");
-		}
-
 		$cache_group = rtrim($group,'s').'-queries';
-
-		$blogkey = $this->get_valid_key('%',$cache_group);
-		try {
-			$this->db->beginTransaction();
-			$stmt->execute( ['group' => $cache_group.'|'.$blogkey] );
-			$this->addStats('L2 deletes',$stmt->rowCount());
-			$this->db->commit();
-			$this->addStats('L2 commits',1);
-		} catch ( Exception $ex ) {
-			$this->db->rollBack();
-			$this->error_log(__METHOD__,$ex);
-		}
+		$this->flush_group($cache_group,true);
 	}
 
 
@@ -618,22 +692,6 @@ class WP_Object_Cache
 
 
 	/**
-	 * Serves as a utility function to determine whether a key exists in the cache.
-	 *
-	 * @since 3.4.0
-	 *
-	 * @param int|string $key   Cache key to check for existence.
-	 * @param string     $group Cache group for the key existence check.
-	 * @return bool Whether the key exists in the cache for the given group.
-	 */
-	protected function _exists( $key, $group )
-	{
-		if ( ! $blogkey = $this->get_valid_key( $key, $group ) ) return false;
-		return $this->key_exists( $blogkey, $group );
-	}
-
-
-	/**
 	 * Serves as a utility function to determine whether a key is valid.
 	 *
 	 * @since 6.1.0
@@ -643,11 +701,7 @@ class WP_Object_Cache
 	 */
 	protected function is_valid_key( $key )
 	{
-		if ( is_int( $key ) ) {
-			return true;
-		}
-
-		if ( is_string( $key ) && trim( $key ) !== '' ) {
+		if ( is_int( $key ) || ( is_string( $key ) && trim( $key ) !== '' ) ) {
 			return true;
 		}
 
@@ -672,42 +726,61 @@ class WP_Object_Cache
 	}
 
 
+	/**
+	 * Are we using the SQLite database
+	 *
+	 * @return bool
+	 */
+	public function usingSQLite(): bool
+	{
+		return (bool) $this->use_db;
+	}
+
+
+	/**
+	 * Are we using the APCu cache
+	 *
+	 * @return bool
+	 */
+	public function usingAPCu(): bool
+	{
+		return (bool) $this->use_apcu;
+	}
+
+
 	/*
-	 * SQLite select (one / all / each)
+	 * SQLite select (one / each)
 	 */
 
 
 	/**
-	 * select a single record from the database.
+	 * Select a single record from the database.
 	 *
 	 * @param string	$blogkey Cache key to check for existence. (blog|key)
 	 * @param string	$group Cache group for the key existence check.
-	 * @param bool 		$force overwrite existing L1 cache
 	 * @return array|bool	selected row or false
 	 */
-	private function select_one( string $blogkey, string $group, bool $force = true )
+	private function select_one( string $blogkey, string $group )
 	{
 		static $stmt = null;
-
-		if ( ! $this->db ) return false;
-
-		$this->L1_cache[ $group ][ $blogkey ] = false;
-
-		if ( $this->is_non_persistent_group($group) ) return false;
+		$this->select_count = 0;
 
 		if (is_null($stmt)) {
-			$stmt = $this->db->prepare(
+			$stmt = $this->use_db->prepare(
 				"SELECT * FROM wp_cache".
 				" WHERE key = :key AND (expire = 0 OR expire >= {$this->time_now}) LIMIT 1;"
 			);
 		}
 
+		// cache not-found, prevents repeated selects
+		$this->L1_cache[ $group ][ $blogkey ] = false;
+
 		try {
 			$stmt->execute( ['key' => $group.'|'.$blogkey] );
+			$this->addRuntimeStats('L2 SQL selects',1);
 			if ($row = $stmt->fetch()) {
-				$row = $this->select_parse( $row, $force );
+				$row = $this->select_parse( $row, true );
 			}
-			$this->addStats('L2 selects',1);
 			$stmt->closeCursor();
 		} catch ( Exception $ex ) {
 			$this->error_log(__METHOD__,$ex);
@@ -718,39 +791,14 @@ class WP_Object_Cache
 
 
 	/**
-	 * select multiple records from the database.
+	 * Select each record from the database.
 	 *
 	 * @param array		$blogkeys keys to select (group => [blogkey,...]).
 	 * @param bool		$like use 'key like' not 'key in'
-	 * @param bool 		$force overwrite existing L1 cache
-	 * @return array|bool	selected rows or false
-	 */
-	private function select_all( array $blogkeys, bool $like = false, bool $force = true ): array
-	{
-		$rows = false;
-
-		if ($cursor = $this->select_cursor($blogkeys,$like))
-		{
-			if ($rows = $cursor->fetchAll()) {
-				foreach ($rows as &$row) {
-					$row = $this->select_parse( $row, $force );
-				}
-			}
-			$cursor->closeCursor();
-		}
-		return ($rows) ? $rows : [];
-	}
-
-
-	/**
-	 * select each record from the database.
-	 *
-	 * @param array		$blogkeys keys to select (group => [blogkey,...]).
-	 * @param bool		$like use 'key like' not 'key in'
-	 * @param bool 		$force overwrite existing L1 cache
+	 * @param bool 		$push update memory/APCu cache (default)
 	 * @return array|bool	each selected row or false
 	 */
-	private function select_each( array $blogkeys, bool $like = false, bool $force = true )
+	private function select_each( array $blogkeys, bool $like = false, bool $push = true )
 	{
 		static $cursor = null;
 
@@ -762,7 +810,7 @@ class WP_Object_Cache
 
 		if ($cursor) {
 			if ($row = $cursor->fetch()) {
-				$row = $this->select_parse( $row, $force );
+				$row = $this->select_parse( $row, $push );
 			} else {
 				$cursor->closeCursor();
 				$cursor = null;
@@ -774,7 +822,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * execute select for multiple rows, returning cursor for fetch() or fetchAll()
+	 * Execute select for multiple rows, returning cursor for fetch() or fetchAll().
 	 *
 	 * @param array		$blogkeys keys to select (group => [blogkey,...]).
 	 * @param bool		$like use 'key like' not 'key in'
@@ -782,16 +830,15 @@ class WP_Object_Cache
 	 */
 	private function select_cursor( array $blogkeys, bool $like = false )
 	{
-		if ( ! $this->db ) return false;
+		$this->select_count = 0;
 
 		// get the blogkeys that we need to select from L2
 		$selectkeys = [];
 		foreach ($blogkeys as $group => $keys) {
 			foreach ($keys as $blogkey) {
 				$selectkeys[] = $group.'|'.$blogkey;
-				if (!$like) {
-					$this->L1_cache[ $group ][ $blogkey ] = false;
-				}
+				// cache not-found, prevents repeated selects
+				$this->L1_cache[ $group ][ $blogkey ] = false;
 			}
 		}
 
@@ -803,46 +850,57 @@ class WP_Object_Cache
 			? substr(str_repeat( 'KEY LIKE ? OR ', count($selectkeys)),0,-4)
 			: 'KEY IN (' . substr(str_repeat('?,', count($selectkeys)),0,-1) . ')';
 
-		$stmt = $this->db->prepare(
+		$stmt = $this->use_db->prepare(
 			"SELECT * FROM wp_cache".
 			" WHERE {$where} AND (expire = 0 OR expire >= {$this->time_now});"
 		);
 
 		try {
 			$stmt->execute($selectkeys);
+			$this->addRuntimeStats('L2 SQL selects',1);
 		} catch ( Exception $ex ) {
 			$this->error_log(__METHOD__,$ex);
 			return false;
 		}
-
-		$this->addStats('L2 selects',1);
 
 		return $stmt;
 	}
 
 
 	/**
-	 * parse key from database row, unserialize value, and add to L1 cache.
+	 * Parse key from database row, unserialize value, and add to L1 cache.
 	 * sets expire to seconds (not time) and adds to L1 cache.
 	 *
-	 * @param array 	$row database row (key, value, expire)
-	 * @param bool 		$force overwrite existing L1 cache (default)
+	 * @param array 	$data database row (key, value, expire)
+	 * @param bool 		$push update memory/APCu cache (default)
 	 * @return array row (key, value, expire, group, blog)
 	 */
-	private function select_parse( array $row, bool $force = true ): array
+	private function select_parse( array $data, bool $push = true ): array
 	{
-		if (preg_match("/^(?<group>.*)\|(?<blog>\d{5})\|(?<key>.*)$/", $row['key'], $parts)) {
-			$row = array_merge($row,array_filter($parts,'is_string',ARRAY_FILTER_USE_KEY));
-			$row['value']	= maybe_unserialize($row['value']);
-			$row['expire']	= (!empty($row['expire'])) ? $row['expire'] - $this->time_now : 0;
-			// add to the L1 (memory) cache
-			$blogkey		= $row['blog'].'|'.$row['key'];
-			if ($force || empty($this->L1_cache[ $row['group'] ][ $blogkey ])) {
-				$this->L1_cache[ $row['group'] ][ $blogkey ] = [ 'value'=>$row['value'], 'expire'=>$row['expire'] ];
-				unset($this->L2_cache[ $row['group'] ][ $blogkey ]);
+		if ($row = $this->parse_key("sqlite|".$data['key']))
+		{
+			$this->select_count++;
+			$row['value']	= maybe_unserialize($data['value']);
+			$row['expire']	= (!empty($data['expire'])) ? $data['expire'] - $this->time_now : 0;
+
+			if ($push || empty($this->L1_cache[ $row['group'] ][ $row['blogkey'] ]))
+			{
+				unset($this->L1_cache[ $row['group'] ][ $row['blogkey'] ],
+					  $this->L2_cache[ $row['group'] ][ $row['blogkey'] ]);
+				// add to the L1 (memory) cache
+				if (! $this->optimize_memory) {
+					$this->L1_cache[ $row['group'] ][ $row['blogkey'] ] =
+						[ 'value'=>$row['value'], 'expire'=>$row['expire'] ];
+				}
+				// add to the APCu cache - if reading from db must not be in apcu
+				if ($apcu_key = $this->get_apcu_key( $row['group'], $row['blogkey'] )) {
+					if (apcu_store($apcu_key, [ 'value'=>$row['value'], 'expire'=>$row['expire'] ], $row['expire'])) {
+						$this->addRuntimeStats('L2 APCu updates',1);
+					} else {
+						$this->error_log(__METHOD__,"APCu store failed for key ".$apcu_key,'error');
+					}
+				}
 			}
-		} else { // this shouldn't ever happen
-			$this->error_log(__METHOD__, 'invalid cache key format ['.$key.']');
 		}
 		return $row;
 	}
@@ -854,100 +912,233 @@ class WP_Object_Cache
 
 
 	/**
-	 * Serves as a utility function to determine whether a key is valid.
+	 * Parse key from SQL row or APCu iterator.
+	 *
+	 * @param string 	$key key "prefix|group|blog|key"
+	 * @return array  	[prefix, group, blog, key, blogkey]
+	 */
+	private function parse_key( string $key )
+	{
+		static $parse_key 	= "/^(?<prefix>.*)\|(?<group>.*)\|(?<blog>\d{5})\|(?<key>.*)$/";
+
+		if (preg_match($parse_key,$key,$parts)) {
+			$parts 				= array_filter($parts,'is_string',ARRAY_FILTER_USE_KEY);
+			$parts['blogkey']	= $parts['blog'].'|'.$parts['key'];
+			return $parts;
+		} else {
+			$this->error_log(__METHOD__, 'invalid cache key format ['.$key.']','error');
+			return false;
+		}
+	}
+
+
+	/**
+	 * Are we currently using the L2 caches
+	 *
+	 * @param string	 $group Where to group the cache contents. Default 'default'.
+	 * @return bool
+	 */
+	private function usingL2cache( $group )
+	{
+		global $_wp_using_ext_object_cache;
+
+		return ($_wp_using_ext_object_cache && ! $this->is_non_persistent_group($group));
+	}
+
+
+	/**
+	 * Get the blog id for a group
+	 *
+	 * @param string	 $group Where to group the cache contents. Default 'default'.
+	 * @return int blog id.
+	 */
+	private function get_blog_id( $group )
+	{
+		return ( $this->is_multisite && !$this->is_global_group($group) )
+			? $this->blog_id
+			: 0;
+	}
+
+
+	/**
+	 * Get key with blog prefix - blog | key - and verify/set group
 	 *
 	 * @param int|string $key Cache key to check for validity.
 	 * @param string	 $group Where to group the cache contents. Default 'default'.
 	 * @return string|bool combined site|key if the key is valid.
 	 */
-	private function get_valid_key( $key, $group, $global = false )
+	private function get_blog_key( $key, &$group )
 	{
-		if ($this->is_valid_key($key)) {
-			$blog_id = ( $this->is_multisite && !$this->is_global_group($group) )
-				? $this->blog_id : 0;
-			return sprintf( "%05d|%s", $blog_id, $key );
-		}
+		if (empty( $group )) $group = 'default';
 
+		return ($this->is_valid_key($key))
+			? sprintf( "%05d|%s", $this->get_blog_id( $group ), $key )
+			: false;
+	}
+
+
+	/**
+	 * Get the APCu cache key - prefix | group | blog | key.
+	 *
+	 * @param string	$group Where to group the cache contents. Default 'default'.
+	 * @param string	$blogkey blog id or blog|key (see get_blog_key)
+	 * @return string|bool key used for APCu cache
+	 */
+	private function get_apcu_key( $group=null, $blogkey=null )
+	{
+		global $_wp_using_ext_object_cache;
+
+		if ($this->use_apcu && $_wp_using_ext_object_cache)
+		{
+			$apcu_key = $this->use_apcu.'|';
+			if ($group) {
+				$apcu_key .= $group.'|';
+				if (!is_null($blogkey)) {
+					$apcu_key .= (is_int($blogkey)) ? sprintf("%05d|", $blogkey) : $blogkey;
+				}
+			}
+			return $apcu_key;
+		}
 		return false;
 	}
 
 
 	/**
-	 * Serves as a utility function to determine whether a key exists in the cache.
+	 * Determine whether a key exists in the cache, memory or database.
 	 *
 	 * @param string	$blogkey Cache key to check for existence. (blog|key)
 	 * @param string	$group Cache group for the key existence check.
 	 * @param bool		$count increment hits/misses
 	 * @return bool Whether the key exists in the cache for the given group.
 	 */
-	private function key_exists( string $blogkey, string $group, $count = false ): bool
+	private function key_exists( string $blogkey, string $group, bool $count = false ): bool
 	{
-		return ($this->key_exists_memory( $blogkey, $group, $count ))
-			? (bool) $this->L1_cache[ $group ][ $blogkey ]
-			: ( !$this->is_prefetch_group($group)
-				? $this->key_exists_database( $blogkey, $group, $count )
-				: false );
+		// Does the key exist in the L1 cache?
+		$found = $this->key_exists_memory( $blogkey, $group, $count );
+		if (is_bool($found)) return $found;
+
+		$this->current = null;
+
+		// non-persistent keys aren't in L2 cache
+		if ( $this->is_non_persistent_group($group) ) {
+			$this->L1_cache[ $group ][ $blogkey ] = false;
+			$this->addRuntimeStats('L2 non-persistent',(int)$count);
+			return false;
+		}
+
+		if (! wp_using_ext_object_cache()) {
+			$this->addRuntimeStats('L2 non-persistent',(int)$count);
+			return false;
+		}
+
+		// Does the key exist in the APCu cache?
+		$found = $this->key_exists_apcu( $blogkey, $group, $count );
+		if (is_bool($found)) return $found;
+
+		// Does the key exist in the SQL cache?
+		return $this->key_exists_database( $blogkey, $group, $count );
 	}
 
 
 	/**
-	 * Serves as a utility function to determine whether a key exists in the memory cache.
+	 * Determine whether a key exists in the memory cache.
 	 *
 	 * @param string	$blogkey Cache key to check for existence. (blog|key)
 	 * @param string	$group Cache group for the key existence check.
 	 * @param bool		$count increment L1 hits/misses
-	 * @return int	+1 = found w/data, -1 = found no data, 0 not found
+	 * @return bool|null	true = found w/data, false = found no data, null not found
 	 */
-	private function key_exists_memory( string $blogkey, string $group, $count = false ): int
+	private function key_exists_memory( string $blogkey, string $group, bool $count = false ): ?bool
 	{
-		if ( isset( $this->L1_cache[ $group ], $this->L1_cache[ $group ][ $blogkey ] ) ) {
-			if ($count) {
-				$this->addStats('cache hits',1,$group);
-				$this->addStats('L1 cache hits',1);
-			}
-			if ($this->L1_cache[ $group ][ $blogkey ] !== false) {
-				if ($count) $this->addStats('L1 cache (+)',1);
-				return +1;
+		if (isset( $this->L1_cache[ $group ], $this->L1_cache[ $group ][ $blogkey ] ))
+		{
+			if (is_object($this->L1_cache[ $group ][ $blogkey ])) {
+				$this->current = clone $this->L1_cache[ $group ][ $blogkey ];
 			} else {
-				if ($count) $this->addStats('L1 cache (-)',1);
-				return -1;
+				$this->current = $this->L1_cache[ $group ][ $blogkey ];
+			}
+			$this->addRuntimeStats('cache hits',(int)$count,$group);
+			$this->addRuntimeStats('L1 cache hits',(int)$count);
+
+			if ($this->current !== false) {
+				$this->addRuntimeStats('L1 cache (+)',(int)$count);
+				return true;
+			} else {
+				$this->addRuntimeStats('L1 cache (-)',(int)$count);
+				return false;
 			}
 		}
 
-		if ($count) {
-			$this->addStats('cache misses',1);
-			$this->addStats('L1 cache misses',1);
-		}
-		return 0;
+		$this->addRuntimeStats('L1 cache misses',(int)$count);
+		return null;
 	}
 
 
 	/**
-	 * Serves as a utility function to determine whether a key exists in the database cache.
+	 * Determine whether a key exists in the APCu cache.
+	 *
+	 * @param string	$blogkey Cache key to check for existence. (blog|key)
+	 * @param string	$group Cache group for the key existence check.
+	 * @param bool		$count increment L1 hits/misses
+	 * @return bool|null	true = found w/data, false = found no data, null not found
+	 */
+	private function key_exists_apcu( string $blogkey, string $group, bool $count = false ): ?bool
+	{
+		if ( ! $this->use_apcu ) return false;
+
+		if (($apcu_key = $this->get_apcu_key($group, $blogkey)) && ($data = apcu_fetch($apcu_key)))
+		{
+			$this->current = (is_array($data)) ? $data : false;
+			if (! $this->optimize_memory) {
+				$this->L1_cache[ $group ][ $blogkey ] = $this->current;
+			} else {
+				unset($this->L1_cache[ $group ][ $blogkey ]);
+			}
+			$this->addRuntimeStats('cache hits',(int)$count,$group);
+			$this->addRuntimeStats('L2 APCu hits',(int)$count);
+
+			if ($this->current !== false) {
+				$this->addRuntimeStats('L2 APCu (+)',(int)$count);
+				return true;
+			} else {
+				$this->addRuntimeStats('L2 APCu (-)',(int)$count);
+				return false;
+			}
+		}
+
+		$this->addRuntimeStats('L2 APCu misses',(int)$count);
+		return null;
+	}
+
+
+	/**
+	 * Determine whether a key exists in the database cache.
 	 *
 	 * @param string	$blogkey Cache key to check for existence. (blog|key)
 	 * @param string	$group Cache group for the key existence check.
 	 * @param bool		$count increment L2 hits/misses
 	 * @return bool Whether the key exists in the db
 	 */
-	private function key_exists_database( string $blogkey, string $group, $count = false ): bool
+	private function key_exists_database( string $blogkey, string $group, bool $count = false ): bool
 	{
-		if ( ! $this->db ) return false;
-		if ( ! wp_using_ext_object_cache() ) return false;
+		if ( ! $this->use_db ) return false;
 
-		if ( $row = $this->select_one( $blogkey, $group ) ) {
-			if ($count) {
-				$this->addStats('cache hits',1,$group);
-				$this->addStats('L2 cache hits',1);
-			}
+		if ($row = $this->select_one( $blogkey, $group ))
+		{
+			$this->current = [ 'value'=>$row['value'], 'expire'=>$row['expire'] ];
+			$this->addRuntimeStats('cache hits',(int)$count,$group);
+			$this->addRuntimeStats('L2 SQL hits',(int)$count);
 			return true;
-		} else {
-			if ($count) {
-				$this->addStats('cache misses',1);
-				$this->addStats('L2 cache misses',1);
-			}
-			return false;
 		}
+
+		// cache SQL misses in APCu
+		if ($apcu_key = $this->get_apcu_key( $group, $blogkey ))
+		{
+			apcu_store($apcu_key, -1, DAY_IN_SECONDS/3);
+		}
+
+		$this->addRuntimeStats('L2 SQL misses',(int)$count);
+		return false;
 	}
 
 
@@ -959,10 +1150,6 @@ class WP_Object_Cache
 	/**
 	 * Adds data to the cache if it doesn't already exist.
 	 *
-	 * @uses WP_Object_Cache::key_exists() Checks to see if the cache already has data.
-	 * @uses WP_Object_Cache::set()		Sets the data after the checking the cache
-	 *									contents existence.
-	 *
 	 * @param int|string $key	 What to call the contents in the cache.
 	 * @param mixed		 $data	 The contents to store in the cache.
 	 * @param string	 $group	 Optional. Where to group the cache contents. Default 'default'.
@@ -972,10 +1159,8 @@ class WP_Object_Cache
 	 */
 	public function add( $key, $data, $group = 'default', $expire = 0 )
 	{
-		if (empty( $group )) $group = 'default';
-
-		if ( ! $blogkey = $this->get_valid_key( $key, $group ) ) return false;
-		if ( $this->key_exists( $blogkey, $group ) ) return false;
+		if ( ! $blogkey = $this->get_blog_key( $key, $group ) ) return false;
+		if ( $this->key_exists( $blogkey, $group, false ) ) return false;
 
 		return $this->set( $key, $data, $group, (int) $expire );
 	}
@@ -1011,8 +1196,6 @@ class WP_Object_Cache
 	/**
 	 * Replaces the contents in the cache, if contents already exist.
 	 *
-	 * @see WP_Object_Cache::set()
-	 *
 	 * @param int|string $key	 What to call the contents in the cache.
 	 * @param mixed		 $data	 The contents to store in the cache.
 	 * @param string	 $group	 Optional. Where to group the cache contents. Default 'default'.
@@ -1022,10 +1205,8 @@ class WP_Object_Cache
 	 */
 	public function replace( $key, $data, $group = 'default', $expire = 0 )
 	{
-		if (empty( $group )) $group = 'default';
-
-		if ( ! $blogkey = $this->get_valid_key( $key, $group ) ) return false;
-		if ( ! $this->key_exists( $blogkey, $group ) ) return false;
+		if ( ! $blogkey = $this->get_blog_key( $key, $group ) ) return false;
+		if ( ! $this->key_exists( $blogkey, $group, false ) ) return false;
 
 		return $this->set( $key, $data, $group, (int) $expire );
 	}
@@ -1074,42 +1255,54 @@ class WP_Object_Cache
 	 */
 	public function set( $key, $data, $group = 'default', $expire = 0 )
 	{
-		if (empty( $group )) $group = 'default';
-
-		if ( ! $blogkey = $this->get_valid_key( $key, $group ) ) return false;
+		if ( is_null($data) ) return false;
+		if ( ! $blogkey = $this->get_blog_key( $key, $group ) ) return false;
 
 		if ( wp_suspend_cache_addition() ) {
-			if ( ! $this->key_exists( $blogkey, $group ) ) return false;
-		}
-
-		if ( is_object( $data ) ) {
-			$data = clone $data;
+			if ( ! $this->key_exists( $blogkey, $group, false ) ) return false;
 		}
 
 		// set default expiration time - transients (perm_groups) don't expire unless explicitly set
 		$expire = (!empty($expire))
 			? (int)$expire
-			: ($this->is_permanent_group($group) ? 0 : ($this->group_expire[$group] ?? $this->default_expire));
+			: (int)($this->is_permanent_group($group) ? 0 : ($this->group_expire[$group] ?? $this->default_expire));
 
 		// value has not changed
-		if ( ($this->key_exists_memory( $blogkey, $group ) > 0)
-			&& ($data	=== $this->L1_cache[ $group ][ $blogkey ][ 'value' ])
-			&& ($expire === $this->L1_cache[ $group ][ $blogkey ][ 'expire' ])
+		if ($this->key_exists_memory( $blogkey, $group, false )
+			&& ($data	=== $this->current[ 'value' ])
+			&& ($expire === $this->current[ 'expire' ])
 		) {
 			return false;
 		}
 
-		$this->L1_cache[ $group ][ $blogkey ] = [ 'value' => $data, 'expire' => $expire ];
+		if ( is_object( $data ) ) $data = clone $data;
+		$this->L1_cache[ $group ][ $blogkey ] = $this->current = [ 'value' => $data, 'expire' => $expire ];
 
 		// when not to write to db
-		if ( ! $this->db || $expire < 0 || $this->is_non_persistent_group($group) || !wp_using_ext_object_cache() ) {
+		if ( $expire < 0 || ! $this->usingL2cache($group) ) {
 			return true;
 		}
 
-		// add the record
-		$this->L2_cache[ $group ][ $blogkey ] = (int)$expire;
-		$this->maybe_write_cache();
+		// add the value to APCu
+		if ($apcu_key = $this->get_apcu_key( $group, $blogkey ))
+		{
+			if (apcu_store($apcu_key, $this->current, $expire)) {
+				if ($key != 'alloptions' && $key != 'notoptions') { // repeatedly updated
+					$this->addRuntimeStats('L2 APCu updates',1);
+				}
+			} else {
+				$this->error_log(__METHOD__,"APCu store failed for key ".$apcu_key,'error');
+			}
+		}
 
+		// add the value to SQLite
+		if ($this->use_db)
+		{
+			$this->L2_cache[ $group ][ $blogkey ] = $expire;
+			$this->maybe_write_cache();
+		}
+
+		$this->current = null;
 		return true;
 	}
 
@@ -1141,7 +1334,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * Retrieves the cache contents, if it exists. - wp_cache_get()
+	 * Retrieves the cache contents, if it exists. - wp_cache_get().
 	 *
 	 * The contents will be first attempted to be retrieved by searching by the
 	 * key in the cache group. If the cache is hit (success) then the contents
@@ -1159,59 +1352,60 @@ class WP_Object_Cache
 	 */
 	public function get( $key, $group = 'default', $force = false, &$found = null )
 	{
-		if (empty( $group )) $group = 'default';
+		if ($force && $this->usingL2cache($group)) {
+		// $force is intended to read from L2 cache,
+		// 	assuming L2 is the most recent, maybe updated by another process.
+		// However, with delayed writes, we don't know that, Our L1 may be most recent.
+		// Using APCu does work as it is shared and updated immediately.
+		// Used by 'alloptions' when adding/removing a single option and _get_cron_lock() in wp-cron process.
+			if (($blogkey = $this->get_blog_key( $key, $group ))
+			&&  ($this->key_exists_apcu( $blogkey, $group, true ))) {
+				$this->addRuntimeStats('L1 cache misses',1); // count as L1 miss
+				$found = true;
+				return $this->current[ 'value' ];
+			}
+		}
 
-		if ($result = $this->get_cache($key, $group, true, $force)) {
+		if ($result = $this->get_cache($key, $group, true)) {
 			$found = true;
 			return $result;
 		}
+
+		// maybe import transient from MySQL
+		if (!defined('EAC_OBJECT_CACHE_DISABLE_TRANSIENT_IMPORT')) {
+			if ($group == 'transient') {
+				if ($result = $this->get_transient($key)) {
+					$found = true;
+					return $result;
+				}
+			} else
+			if ($group == 'site-transient') {
+				if ($result = $this->get_site_transient($key)) {
+					$found = true;
+					return $result;
+				}
+			}
+		}
+
 		$found = false;
 		return false;
 	}
 
 
 	/**
-	 * Internal get_cache - get from L1 or L2 cache, with (get) or without (internal) counting hit/miss
+	 * Internal get_cache - get from L1 or L2 cache, with (get) or without (internal) counting hit/miss.
 	 *
 	 * @param int|string $key	The key under which the cache contents are stored.
 	 * @param string	 $group Optional. Where the cache contents are grouped. Default 'default'.
 	 * @param bool		 $count Optional. Whether to add to the cache counts.
-	 * @param bool	 	 $force Optional. Whether to force an update of the local cache
-	 *						from the persistent cache. Default false.
 	 */
-	protected function get_cache( $key, $group = 'default', $count = false, $force = false )
+	protected function get_cache( $key, $group = 'default', $count = false)
 	{
-		if ( ! $blogkey = $this->get_valid_key( $key, $group ) ) return false;
+		if ( ! $blogkey = $this->get_blog_key( $key, $group ) ) return false;
 
-		// $force is intended to read from L2 cache.
-		// 		Used by 'alloptions' when adding/removing a single option
-		//		and _get_cron_lock() in wp-cron process.
-		// Any L1 key exists only for the current process
-		// whereas the L2 key could be updated by another process.
-		$force = false;		// this doesn't work with 'alloptions'
-
-		$return = $save = false;
-
-		if ($force) {
-			$save = $this->L1_cache[ $group ][ $blogkey ] ?? false;
-			$return = $this->key_exists_database( $blogkey, $group, $count );
-		}
-
-		if (!$return) {
-			$return = $this->key_exists( $blogkey, $group, $count );
-		}
-
-		if ($return && $this->L1_cache[ $group ][ $blogkey ]) {
-			$return = ( is_object( $this->L1_cache[ $group ][ $blogkey ][ 'value' ] ) )
-				? clone $this->L1_cache[ $group ][ $blogkey ][ 'value' ]
-				: $this->L1_cache[ $group ][ $blogkey ][ 'value' ];
-		}
-
-		if ($save) {
-			$this->L1_cache[ $group ][ $blogkey ] = $save;
-		}
-
-		return $return;
+		return ($this->key_exists( $blogkey, $group, $count ))
+			? $this->current[ 'value' ] ?? false
+			: (bool)$this->addRuntimeStats('cache misses',(int)$count);
 	}
 
 
@@ -1232,36 +1426,46 @@ class WP_Object_Cache
 
 		if (empty( $group )) $group = 'default';
 
-		$blogkeys	= [];
-		$selects	= 0;
+		$blogkeys		= [];	// keys to select from db
+		$selects		= 0; 	// count selects
+		$use_l2_cache 	= $this->usingL2cache($group);
+
+
+		// get from L1 memory or L2 APCu cache first
 		foreach ( $values as $key => &$value ) {
-			if ( $blogkey = $this->get_valid_key( $key, $group ) ) {
-				if ($force || ! $this->key_exists_memory($blogkey, $group, true)) {
-					$blogkeys[ $group ][] = $blogkey;
-					$selects++;
-				} else {
-					$value = $this->L1_cache[ $group ][ $blogkey ][ 'value' ] ?? false;
-				}
-			}
-		}
-
-		$hits = 0;
-		if ( wp_using_ext_object_cache() ) {
-			if ( $this->db && ! $this->is_non_persistent_group($group) ) {
-				if (!empty($blogkeys)) {
-				//	foreach ($this->select_all( $blogkeys ) as $row) {
-					while ($row = $this->select_each( $blogkeys ) ) {
-						$values[ $row['key'] ] = $row['value'];
-						$hits++;
+			if ( $blogkey = $this->get_blog_key( $key, $group ) ) {
+				$blogkeys[ $group ][$key] = $blogkey; // to be selected
+				if (! $force && is_bool($this->key_exists_memory($blogkey, $group, true))) {
+					$value = $this->current[ 'value' ] ?? false;
+					unset($blogkeys[ $group ][$key]);
+				} else if ( $use_l2_cache ) {
+					if (is_bool($this->key_exists_apcu($blogkey, $group, true))) {
+						$value = $this->current[ 'value' ] ?? false;
+						unset($blogkeys[ $group ][$key]);
 					}
-					$this->addStats('L2 cache hits',$hits);
-					$this->addStats('L2 cache misses',$selects - $hits);
 				}
 			}
 		}
 
-		$this->addStats('cache hits',$hits,$group);
-		$this->addStats('cache misses',count($values) - $hits);
+		// get from L2 SQLite cache
+		$selects = count($blogkeys,COUNT_RECURSIVE) - count($blogkeys);
+		if ( $use_l2_cache ) {
+			if ( $this->use_db && $selects > 0 ) {
+				if (!empty($blogkeys)) {
+					while ($row = $this->select_each($blogkeys,true,false)) {
+						$values[ $row['key'] ] = $row['value'];
+					}
+					$this->addRuntimeStats('cache hits',$this->select_count,$group);
+					$this->addRuntimeStats('L2 SQL hits',$this->select_count);
+					$this->addRuntimeStats('L2 SQL misses',$selects - $this->select_count);
+				}
+			}
+		} else {
+			$this->addRuntimeStats('L2 non-persistent',$selects);
+		}
+
+		$this->addRuntimeStats('cache misses',count( array_filter($values, fn($v) => $v === false) ));
+		$this->current = null;
 		return $values;
 	}
 
@@ -1274,27 +1478,55 @@ class WP_Object_Cache
 	 */
 	public function get_group( string $group )
 	{
-		$L2_hits = 0;
-		if ( wp_using_ext_object_cache() ) {
-			if ( $this->db && ! $this->is_non_persistent_group($group) ) {
-				// get L2 group into L1 (use 'like', don't overwrite L1)
-				$blogkey = [ $group => [$this->get_valid_key('%',$group)] ];
-				while ($this->select_each( $blogkey, true, false ) ) {
-					$L2_hits++;
+		$found 		= [];
+
+		if (isset($this->L1_cache[ $group ])) {
+			// get from L1 memory cache first
+			$blog_id 	= sprintf('%05d|',$this->get_blog_id($group));
+			foreach($this->L1_cache[ $group ] as $blogkey => $data) {
+				if (str_starts_with($blogkey,$blog_id) && is_array($data)) {
+					$blogkey = substr($blogkey,6);
+					$found[ $blogkey ] = $data['value'];
+					$this->addRuntimeStats('L1 cache hits',1);
+					$this->addRuntimeStats('L1 cache (+)',1);
 				}
-				$this->addStats('L2 cache hits',$L2_hits);
 			}
 		}
 
-		$return = [];
-		foreach ($this->L1_cache[ $group ] as $key => $value) {
-			if (!empty($value)) {
-				$return[ substr($key,6) ] = $value['value'];
+		if ( $this->usingL2cache($group) ) {
+			// get from L2 APCu cache
+			if ($apcu_key = $this->get_apcu_key( $group, $this->get_blog_id($group) )) {
+				$keys = new APCUIterator('/^'.preg_quote($apcu_key,'/').'/');
+				foreach( $keys as $data ) { // key,value[value,expire]
+					$row = $this->parse_key($data['key']);
+					if (!isset($found[ $row['key'] ]) && is_array($data['value'])) {
+						$found[ $row['key'] ] = $data['value']['value'];
+						$this->addRuntimeStats('L2 APCu hits',1);
+						if (! $this->optimize_memory) {
+							$this->L1_cache[ $group ][ $row['blogkey'] ] = $data['value'];
+						}
+					}
+				}
+			}
+
+			// get from L2 SQLite cache
+			if ( $this->use_db ) {
+				$blogkeys = [ $group => [$this->get_blog_key('%',$group)] ];
+				while ($row = $this->select_each($blogkeys,true,false)) {
+					if (!isset($found[ $row['key'] ])) {
+						$found[ $row['key'] ] = $row['value'];
+						$this->addRuntimeStats('L2 SQL hits',1);
+					}
+				}
 			}
 		}
-		$this->addStats('L1 cache hits',count($return) - $L2_hits);
-		$this->addStats('cache hits',count($return),$group);
-		return $return;
+
+		if (empty($found)) {
+			$this->addRuntimeStats('cache misses',1);
+		} else {
+			$this->addRuntimeStats('cache hits',count($found),$group);
+		}
+		return $found;
 	}
 
 
@@ -1310,20 +1542,26 @@ class WP_Object_Cache
 	 */
 	public function delete( $key, $group = 'default', $deprecated = false )
 	{
-		if (empty( $group )) $group = 'default';
-
-		if ( ! $blogkey = $this->get_valid_key( $key, $group ) ) return false;
-		if ( ! $this->key_exists( $blogkey, $group ) ) return false;
+		if ( ! $blogkey = $this->get_blog_key( $key, $group ) ) return false;
+		//if ( ! $this->key_exists( $blogkey, $group, false ) ) return false;
 
 		$this->L1_cache[ $group ][ $blogkey ] = false;	// not in persistent cache
 
 		// when not to write to db
-		if ( ! $this->db || $this->is_non_persistent_group($group) || !wp_using_ext_object_cache() ) {
+		if ( !$this->usingL2cache($group) ) {
 			return true;
 		}
 
-		$this->L2_cache[ $group ][ $blogkey ] = false;	// to be deleted from table
-		$this->maybe_write_cache();
+		if ($apcu_key = $this->get_apcu_key( $group, $blogkey )) {
+			if (apcu_delete($apcu_key)) {
+				$this->addRuntimeStats('L2 APCu deletes',1);
+			}
+		}
+
+		if ($this->use_db) {
+			$this->L2_cache[ $group ][ $blogkey ] = false;	// to be deleted from table
+			$this->maybe_write_cache();
+		}
 
 		return true;
 	}
@@ -1379,15 +1617,11 @@ class WP_Object_Cache
 	 */
 	public function incr( $key, $offset = 1, $group = 'default' )
 	{
-		if (empty( $group )) $group = 'default';
-
-		if ( ! $blogkey = $this->get_valid_key( $key, $group ) ) return false;
+		if ( ! $blogkey = $this->get_blog_key( $key, $group ) ) return false;
 
 		$value = max( 0, ( (int) $this->get( $key, $group ) + (int) $offset ) );
 
-		$expire = ($this->key_exists_memory( $blogkey, $group ) > 0)
-			? $this->L1_cache[ $group ][ $blogkey ][ 'expire' ]
-			: 0;
+		$expire = $this->current[ 'expire' ] ?: 0;
 
 		$this->set( $key, $value, $group, $expire );
 		return $value;
@@ -1433,7 +1667,6 @@ class WP_Object_Cache
 
 	/**
 	 * Clears the object cache of all data.
-	 * SQLite triggers truncate optomizer
 	 *
 	 * @param bool $force override disabling constant.
 	 * @return bool sql result
@@ -1442,15 +1675,18 @@ class WP_Object_Cache
 	{
 		if (! $force && ! $this->is_flush_enabled('full')) return false;
 
+		// clear L1 memory cache
 		$this->L1_cache = $this->L2_cache = array();
 
-		if ( ! $this->db || ! wp_using_ext_object_cache() ) return false;
+		if ( ! wp_using_ext_object_cache() ) return true;
 
-		do_action( 'qm/start', __METHOD__ );
+		// clear L2 APCu cache
+		$this->delete_cache_APCu();
+		// clear L2 SQLite cache
 		$this->delete_cache_file();
-		do_action( 'qm/stop', __METHOD__ );
-
-		return $this->connect_sqlite();
+		// reconnect SQLite
+		$this->connect_sqlite();
+		return true;
 	}
 
 
@@ -1463,42 +1699,52 @@ class WP_Object_Cache
 	 */
 	public function flush_group( string $group, bool $force = false ): bool
 	{
-		if (! $force && ! $this->is_flush_enabled('group')) return false;
-
 		static $stmt = null;
 
-		$this->write_cache();
-		unset( $this->L1_cache[ $group ] );
+		if (! $force && ! $this->is_flush_enabled('group')) return false;
 
-		if ( ! $this->db || ! wp_using_ext_object_cache() ) return false;
+		// clear L1 memory cache
+		unset( $this->L1_cache[ $group ], $this->L2_cache[ $group ] );
 
-		do_action( 'qm/start', __METHOD__ );
+		if ( ! wp_using_ext_object_cache() ) return true;
 
-		if (is_null($stmt)) {
-			$stmt = $this->db->prepare("DELETE FROM wp_cache WHERE key LIKE :group;");
+		// clear L2 APCu cache
+		if ($apcu_key = $this->get_apcu_key( $group, $this->get_blog_id($group) )) {
+			$keys = new APCUIterator('/^'.preg_quote($apcu_key,'/').'/');
+			if ($count = $keys->getTotalCount()) {
+				apcu_delete( $keys );
+				$this->error_log(__CLASS__,"APCu cache flushed for group: {$group}, {$count} records deleted");
+				$this->addRuntimeStats('L2 APCu deletes',$count);
+			}
 		}
 
+		if ( ! $this->use_db ) return true;
+
+		if (is_null($stmt)) {
+			$stmt = $this->use_db->prepare("DELETE FROM wp_cache WHERE key LIKE :group;");
+		}
+
+		// clear L2 SQLite cache
 		$retries = 0;
 		while ( ++$retries <= $this->max_retries ) {
 			try {
-				$blogkey = $this->get_valid_key('%',$group);
-				$this->db->beginTransaction();
+				$blogkey = $this->get_blog_key('%',$group);
+				$this->use_db->beginTransaction();
 				$stmt->execute( ['group' => $group.'|'.$blogkey] );
-				$this->db->commit();
-				if ($stmt->rowCount()) {
-					$this->error_log(__CLASS__,"cache flushed for group '{$group}', ".
-						$stmt->rowCount()." records deleted");
+				if ($count = $stmt->rowCount()) {
+					$this->error_log(__CLASS__,"SQL cache flushed for group: {$group}, {$count} records deleted");
+					$this->addRuntimeStats('L2 SQL deletes',$count);
+					$this->addRuntimeStats('L2 SQL commits',1);
+				//	$this->addRuntimeStats("flushed {$group}",$count);
 				}
-				$this->addStats("flushed {$group}",$stmt->rowCount());
+				$this->use_db->commit();
 				break;
 			} catch ( Exception $ex ) {
-				$this->db->rollBack();
+				$this->use_db->rollBack();
 				$this->error_log(__METHOD__,$ex);
 				usleep($this->sleep_time);
 			}
 		}
-
-		do_action( 'qm/stop', __METHOD__ );
 
 		return (bool)$stmt;
 	}
@@ -1507,53 +1753,64 @@ class WP_Object_Cache
 	/**
 	 * Removes all cache items tagged with a blog number.
 	 *
-	 * @param string $blog current blog
+	 * @param int $blog current blog
 	 * @param bool $force override disabling constant.
 	 * @return bool sql result
 	 */
 	public function flush_blog( $blog_id = null, bool $force = false ): bool
 	{
-		if (! $force && ! $this->is_flush_enabled('blog')) return false;
-
-		if (! $this->is_multisite) {
-			return $this->flush();
-		}
-
 		static $stmt = null;
 
-		$this->write_cache();
-		$this->L1_cache = array();
-
-		if ( ! $this->db || ! wp_using_ext_object_cache() ) return false;
-
-		do_action( 'qm/start', __METHOD__ );
-
+		if (! $force && ! $this->is_flush_enabled('blog')) return false;
+		if (! $this->is_multisite) return $this->flush();
+		if (! empty($this->L2_cache)) $this->write_cache();
 		if (!is_int($blog_id)) $blog_id = $this->blog_id;
 
-		if (is_null($stmt)) {
-			$stmt = $this->db->prepare("DELETE FROM wp_cache WHERE key LIKE :blog;");
+		// clear L1 memory cache
+		foreach ($this->L1_cache as $group => $keys) {
+			$this->L1_cache[$group] = array_filter($keys,
+				fn($v,$k) => $v === false || !str_starts_with($k,sprintf("%05d|",$blog_id)),ARRAY_FILTER_USE_BOTH);
 		}
 
+		if ( ! wp_using_ext_object_cache() ) return true;
+
+		// clear L2 APCu cache
+		if ($apcu_key = $this->get_apcu_key()) {
+			$apcu_key = preg_quote($apcu_key) . '.+' . preg_quote(sprintf("|%05d|", $blog_id));
+			$keys = new APCUIterator('/^'.$apcu_key.'/');
+			if ($count = $keys->getTotalCount()) {
+				apcu_delete( $keys );
+				$this->error_log(__CLASS__,"APCu cache flushed for site: {$blog_id}, {$count} records deleted");
+				$this->addRuntimeStats('L2 APCu deletes',$count);
+			}
+		}
+
+		if ( ! $this->use_db ) return true;
+
+		if (is_null($stmt)) {
+			$stmt = $this->use_db->prepare("DELETE FROM wp_cache WHERE key LIKE :blog;");
+		}
+
+		// clear L2 SQLite cache
 		$retries = 0;
 		while ( ++$retries <= $this->max_retries ) {
 			try {
-				$this->db->beginTransaction();
+				$this->use_db->beginTransaction();
 				$stmt->execute( ['blog' => '%|'.sprintf("%05d", $blog_id).'|%'] );
-				$this->db->commit();
-				if ($stmt->rowCount()) {
-					$this->error_log(__CLASS__,"cache flushed for blog id {$blog_id}, ".
-						$stmt->rowCount()." records deleted");
+				if ($count = $stmt->rowCount()) {
+					$this->error_log(__CLASS__,"SQL cache flushed for site: {$blog_id}, {$count} records deleted");
+					$this->addRuntimeStats('L2 SQL deletes',$count);
+					$this->addRuntimeStats('L2 SQL commits',1);
+				//	$this->addRuntimeStats("flushed site {$blog_id}",$count);
 				}
-				$this->addStats("flushed blog id {$blog_id}",$stmt->rowCount());
+				$this->use_db->commit();
 				break;
 			} catch ( Exception $ex ) {
-				$this->db->rollBack();
+				$this->use_db->rollBack();
 				$this->error_log(__METHOD__,$ex);
 				usleep($this->sleep_time);
 			}
 		}
-
-		do_action( 'qm/stop', __METHOD__ );
 
 		return (bool)$stmt;
 	}
@@ -1564,22 +1821,33 @@ class WP_Object_Cache
 	 * Intended for use by long-running tasks to invalidate the memory cache
 	 * without invalidating the persistent cache.
 	 *
-	 * @param bool $force (internal) override disabling constant and write to persistend cache before clearing.
+	 * @param bool $force (internal) override disabling constant and write to persistent cache before clearing.
 	 * @return bool Always returns true.
 	 */
 	public function flush_runtime(bool $force = false): bool
 	{
 		if (! $force && ! $this->is_flush_enabled('runtime')) return false;
 
-		do_action( 'qm/start', __METHOD__ );
-
 		if ($force) { // internal, writes misses & cache
-			$this->write_cache();
+			if (! empty($this->L2_cache)) $this->write_cache();
+		} else if ($this->use_apcu) {
+			// clear APCu cache of current keys
+			$apcuKeys = [];
+			foreach($this->L1_cache as $group => $keys) {
+				foreach($keys as $blogkey => $data) {
+					if ($data && ($apcu_key = $this->get_apcu_key($group,$blogkey))) {
+						$apcuKeys[] = $apcu_key;
+					}
+				}
+			}
+			if (!empty($apcuKeys)) {
+				apcu_delete($apcuKeys);
+				$this->addRuntimeStats('L2 APCu deletes',count($apcuKeys));
+			}
 		}
 
+		// clear L1 memory cache
 		$this->L1_cache = $this->L2_cache = array();
-
-		do_action( 'qm/stop', __METHOD__ );
 
 		return true;
 	}
@@ -1597,7 +1865,7 @@ class WP_Object_Cache
 	 * @param string|string[] $groups List of groups that are global.
 	 * @return array [group=>true,...]
 	 */
-	public function add_global_groups( $groups ): array
+	public function add_global_groups( $groups = [] ): array
 	{
 		// EAC_OBJECT_CACHE_GLOBAL_GROUPS
 		$defined_groups = $this->get_defined_groups('global');
@@ -1610,7 +1878,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * is group a global (site-wide) group
+	 * Is group a global (site-wide) group.
 	 *
 	 * @param string $group group name
 	 * @return bool
@@ -1628,7 +1896,7 @@ class WP_Object_Cache
 	 * @param string|string[] $groups List of groups that are non-persistent.
 	 * @return array [group=>true,...]
 	 */
-	public function add_non_persistent_groups( $groups ): array
+	public function add_non_persistent_groups( $groups = [] ): array
 	{
 		// EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS
 		$defined_groups = $this->get_defined_groups('non_persistent');
@@ -1641,7 +1909,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * is group a non-persistent group
+	 * Is group a non-persistent group.
 	 *
 	 * @param string $group group name
 	 * @return bool
@@ -1671,7 +1939,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * is group a permanent group
+	 * Is group a permanent group.
 	 *
 	 * @param string $group group name
 	 * @return bool
@@ -1702,6 +1970,18 @@ class WP_Object_Cache
 
 
 	/**
+	 * Is group a prefetch group
+	 *
+	 * @param string $group group name
+	 * @return bool
+	 */
+	public function is_prefetch_group( $group ): bool
+	{
+		return !$this->use_apcu && (isset($this->prefetch_groups[ $group ]) || str_ends_with($group,':prefetch'));
+	}
+
+
+	/**
 	 * Sets the list of group expirations.
 	 *
 	 * @param array $groups [group => expires]
@@ -1719,19 +1999,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * is group a prefetch group
-	 *
-	 * @param string $group group name
-	 * @return bool
-	 */
-	public function is_prefetch_group( $group ): bool
-	{
-		return isset($this->prefetch_groups[ $group ]) || str_ends_with($group,':prefetch');
-	}
-
-
-	/**
-	 * Get group keys as array from constant
+	 * Get group keys as array from constant.
 	 *
 	 * @param string $constant unique part of group constant name
 	 * @return array [group=>true,...]
@@ -1755,59 +2023,66 @@ class WP_Object_Cache
 	 */
 	private function load_prefetch_groups(): void
 	{
-		if ( ! $this->db ) return;
+		if ( ! $this->use_db || $this->use_apcu ) return;
 
 		$blogkeys = [];
 		$this->prefetch_groups = $this->get_cache('prefetch_groups',self::GROUP_ID) ?: [];
 		foreach (array_keys($this->prefetch_groups) as $group) {
 			if (! $this->is_non_persistent_group($group) ) {
-				$blogkeys[ $group ] = [ $this->get_valid_key('%',$group) ];
+				$blogkeys[ $group ] = [ $this->get_blog_key('%',$group) ];
 			}
 		}
-		$blogkeys[ '%:prefetch' ] = [ $this->get_valid_key('%',':prefetch') ];
+
+		$group = ':prefetch';
+		$blogkeys[ "%{$group}" ] = [ $this->get_blog_key('%',$group) ];
 
 		if (!empty($blogkeys)) {
-			$this->addStats("L2 pre-fetched (+)", count($this->select_all( $blogkeys, true )));
+			while ($this->select_each( $blogkeys )) {}
+			$this->addRuntimeStats("pre-fetched (+)",$this->select_count);
 		}
 	}
 
 
 	/**
 	 * Load cached misses.
+	 * When we set/switch blog.
 	 *
 	 */
 	private function load_cache_misses(): void
 	{
-		if (! $this->prefetch_misses) return;
+		if (! $this->prefetch_misses || ! $this->use_db || $this->use_apcu) return;
+
+		$group 		= self::GROUP_ID;
+		$blog_id 	= $this->get_blog_id('*');
 
 		// load (or re-load) prior cache misses into L1 cache
-		if ($misses = $this->get_cache('cache-misses',self::GROUP_ID)) {
-			$this->L2_missed_stats[$this->blog_id] = 0;
+		if ($misses = $this->get_cache('cache-misses',$group)) {
+			$this->stats_premissed[$blog_id] = 0;
 			foreach ($misses as $group => $keys) {
 				if (!isset( $this->L1_cache[ $group ] )) $this->L1_cache[ $group ] = [];
 				$keys = array_diff_key($keys, $this->L1_cache[ $group ]);
 				$this->L1_cache[ $group ] = array_merge($keys, $this->L1_cache[ $group ]);
-			//	$this->addStats("L2 pre-fetched (-)", count($keys));
-				$this->L2_missed_stats[$this->blog_id] += count($keys);
+				$this->stats_premissed[$blog_id] += count($keys);
 			}
 		}
 		// remove from L1 cache
-		$blogkey = $this->get_valid_key('cache-misses',self::GROUP_ID);
-		unset( $this->L1_cache[ self::GROUP_ID ][ $blogkey ] );
+		$blogkey = $this->get_blog_key('cache-misses',$group);
+		unset( $this->L1_cache[ $group ][ $blogkey ] );
 	}
 
 
 	/**
 	 * Save cached misses.
+	 * When we write the cache (switch blog).
 	 *
 	 */
 	private function save_cache_misses(): void
 	{
-		if (! $this->prefetch_misses || empty($this->L1_cache)) return;
+		if (! $this->prefetch_misses  || ! $this->use_db || $this->use_apcu || empty($this->L1_cache)) return;
 
 		$misses = array();
 		foreach ($this->L1_cache as $group => $keys) {
-			if ($keys = array_filter( $keys, function($v) {return $v === false;} )) {
+			if ($keys = array_filter( $keys, fn($v) => $v === false )) {
 				$misses[$group] = $keys;
 			}
 		}
@@ -1831,13 +2106,12 @@ class WP_Object_Cache
 	{
 		if ($this->is_multisite) {
 			$this->flush_runtime(true);
-			$this->addStats("blog switches",1);
+			$this->addRuntimeStats("blog switches",1);
 		}
 		$this->blog_id = (int)$blog_id;
 		$this->load_prefetch_groups();
 		$this->load_cache_misses();
-		$this->wp_transients( 'import', $this->blog_id );
-
+	//	$this->wp_transients( 'import', $this->blog_id );
 	}
 
 
@@ -1859,15 +2133,11 @@ class WP_Object_Cache
 
 
 	/**
-	 * close the persistent cache (wp_cache_close)
+	 * Close the persistent cache (wp_cache_close)
 	 *
 	 */
 	public function close(): void
 	{
-		if (! $this->db ) return;
-
-		do_action( 'qm/start', __METHOD__ );
-
 		// count requests (since last close)
 		if ($this->is_actionable()) {
 			$site_requests 		= $this->incr('site-requests',1,self::GROUP_ID);
@@ -1879,32 +2149,13 @@ class WP_Object_Cache
 		// maintenance functions (every n requests)
 		if ($this->is_actionable() && $this->probability >= 10)
 		{
-		    $start_time = microtime( true );
 			$this->probability = $this->probability + ($this->probability % 2); // even number
 			$probability = ($network_requests % $this->probability);
 
-			if ($probability == 0)												//	checkpoint/optimize
+			if ($this->use_db  && $probability == 0)							//	checkpoint/optimize
 			{
 				$limit = ((int)$this->delayed_writes >= 10) ? $this->delayed_writes : 32;
-				$stmt = $this->db->prepare(
-					"DELETE FROM wp_cache WHERE expire > 0 AND expire < {$this->time_now} LIMIT {$limit};"
-				);
-				try {
-					$this->db->beginTransaction();
-					$stmt->execute();
-					$this->db->commit();
-					if ($stmt->rowCount() > 0) {
-						$this->db->exec("
-							PRAGMA incremental_vacuum;
-							PRAGMA optimize;
-						");
-					}
-					$message = sprintf("garbage collection deleted %d rows (%01.4f)", $stmt->rowCount(), microtime( true ) - $start_time);
-					$this->error_log(__CLASS__,$message);
-				} catch ( Exception $ex ) {
-					$this->db->rollBack();
-					$this->error_log(__METHOD__,$ex);
-				}
+				$this->optimize(false, $limit);
 			}
 		}
 
@@ -1914,25 +2165,19 @@ class WP_Object_Cache
 
 			if ($probability == 0)												// sampling
 			{
-				$this->set('sample', $this->getStats(), self::GROUP_ID, 0);
-			//	$message = sprintf("request (%d/%d) sampling (%01.4f)",
-			//		$site_requests,$this->display_stats, microtime( true ) - $start_time
-			//	);
-			//	$this->error_log(__CLASS__,$message);
+				$this->set('sample', $this->getStats(true), self::GROUP_ID, 0);
 			}
 		}
 
 		// write the cached records
 		$this->write_cache();
 
-		$this->db = null;
-
-		do_action( 'qm/stop', __METHOD__ );
+		$this->use_db = false;
 	}
 
 
 	/**
-	 * is a PHP request (not ajax, not image, etc.)
+	 * Is a PHP request (not ajax, not image, etc.)
 	 *
 	 */
 	private function is_actionable()
@@ -1966,7 +2211,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * temporarily set or reset delayed_writes.
+	 * Temporarily set or reset delayed_writes.
 	 *
 	 * @param bool|int $set new value
 	 */
@@ -1985,14 +2230,14 @@ class WP_Object_Cache
 
 
 	/**
-	 * write the persistent cache to disk when db cache is full
+	 * Write the persistent cache to disk when db cache is full.
 	 *
 	 */
 	private function maybe_write_cache(): bool
 	{
 		switch ( (int)$this->delayed_writes ) {
 			case 0:		// not delayed
-				return $this->write_cache();
+				return (bool)$this->write_cache();
 			case 1:		// unlimited
 				return false;
 			default:
@@ -2005,7 +2250,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * get the number of records waiting to be updated or deleted
+	 * Get the number of records waiting to be updated or deleted.
 	 *
 	 */
 	private function pending_writes(): int
@@ -2015,7 +2260,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * write the persistent cache to disk
+	 * Write the persistent cache to disk.
 	 *
 	 */
 	private function write_cache(): bool
@@ -2023,7 +2268,7 @@ class WP_Object_Cache
 		// find and cache all cache misses - not in sqlite db
 		$this->save_cache_misses();
 
-		if (! $this->db || empty($this->L2_cache)) {
+		if (! $this->use_db || empty($this->L2_cache)) {
 			return false;
 		}
 
@@ -2033,9 +2278,17 @@ class WP_Object_Cache
 		foreach ($this->L2_cache as $group => $updates) {
 			foreach ($updates as $blogkey => $expire) {
 				if ($expire !== false) {
+					$data = $this->L1_cache[ $group ][ $blogkey ][ 'value' ] ?? null;
+					if (is_null($data) && ($apcu_key = $this->get_apcu_key($group, $blogkey))) {
+						if ($data = apcu_fetch($apcu_key)) $data = $data[ 'value' ] ?? null;
+					}
+					if (is_null($data)) {
+						$this->error_log(__METHOD__,"SQL write no data for key ".$group.'|'.$blogkey);
+						continue;
+					}
 					$write[] = array(
 							$group.'|'.$blogkey,
-							maybe_serialize($this->L1_cache[ $group ][ $blogkey ][ 'value' ] ?? null),
+							maybe_serialize($data),
 							( ($expire) ? $this->time_now+$expire : 0 )
 					);
 				} else {
@@ -2046,9 +2299,9 @@ class WP_Object_Cache
 
 		$this->L2_cache = array();
 
-		// replace records
+		// insert/update records
 		if (!empty($write)) {
-			$stmt = $this->db->prepare(
+			$stmt = $this->use_db->prepare(
 				"INSERT INTO wp_cache (key, value, expire)" .
 				" VALUES ".rtrim(str_repeat("(?,?,?),", count($write)),',') .
 				" ON CONFLICT (key) DO UPDATE".
@@ -2057,14 +2310,14 @@ class WP_Object_Cache
 			$retries = 0;
 			while ( ++$retries <= $this->max_retries ) {
 				try {
-					$this->db->beginTransaction();
+					$this->use_db->beginTransaction();
 					$stmt->execute(array_merge(...$write));
-					$this->addStats('L2 updates',$stmt->rowCount());
-					$this->db->commit();
-					$this->addStats('L2 commits',1);
+					$this->addRuntimeStats('L2 SQL updates',$stmt->rowCount());
+					$this->use_db->commit();
+					$this->addRuntimeStats('L2 SQL commits',1);
 					break;
 				} catch ( Exception $ex ) {
-					$this->db->rollBack();
+					$this->use_db->rollBack();
 					$this->error_log(__METHOD__,$ex);
 					usleep($this->sleep_time);
 				}
@@ -2073,21 +2326,21 @@ class WP_Object_Cache
 
 		// delete records
 		if (!empty($delete)) {
-			$stmt = $this->db->prepare(
+			$stmt = $this->use_db->prepare(
 				"DELETE FROM wp_cache".
 				" WHERE key in (".rtrim(str_repeat("?,", count($delete)),',').")"
 			);
 			$retries = 0;
 			while ( ++$retries <= $this->max_retries ) {
 				try {
-					$this->db->beginTransaction();
+					$this->use_db->beginTransaction();
 					$stmt->execute($delete);
-					$this->addStats('L2 deletes',$stmt->rowCount());
-					$this->db->commit();
-					$this->addStats('L2 commits',1);
+					$this->addRuntimeStats('L2 SQL deletes',$stmt->rowCount());
+					$this->use_db->commit();
+					$this->addRuntimeStats('L2 SQL commits',1);
 					break;
 				} catch ( Exception $ex ) {
-					$this->db->rollBack();
+					$this->use_db->rollBack();
 					$this->error_log(__METHOD__,$ex);
 					usleep($this->sleep_time);
 				}
@@ -2099,53 +2352,70 @@ class WP_Object_Cache
 
 
 	/**
+	 * Delete the L2 APCu cache.
+	 *
+	 */
+	public function delete_cache_APCu(): void
+	{
+		if ($apcu_key = $this->get_apcu_key()) {
+			$keys = new APCUIterator('/^'.preg_quote($apcu_key,'/').'/');
+			apcu_delete( $keys );
+			$this->error_log(__CLASS__,"APCu cache deleted");
+		}
+	}
+
+
+	/**
 	 * Delete the L2 cache file(s).
 	 * Since we load early, WP_Filesystem is probably not available
 	 *
 	 */
 	public function delete_cache_file(): void
 	{
-		$this->db = null;
-
-		$cacheName = trailingslashit($this->cache_dir) . $this->cache_file;
-		foreach ( [ '', '-journal', '-shm', '-wal' ] as $ext ) {
-			if (file_exists($cacheName.$ext)) {
-				unlink($cacheName.$ext);
+		if ($this->use_db) {
+			$cacheName = trailingslashit($this->cache_dir) . $this->cache_file;
+			foreach ( [ '', '-journal', '-shm', '-wal' ] as $ext ) {
+				if (is_file($cacheName.$ext)) {
+					unlink($cacheName.$ext);
+				}
 			}
+			$this->error_log(__CLASS__,"SQLite cache deleted");
+			$this->use_db = false;
 		}
-		$this->error_log(__CLASS__,"L2 cache deleted");
 	}
 
 
 	/**
 	 * Callable function to vacuum/optimize database.
-	 * scedule with delete_expired_transients
+	 * schedule with delete_expired_transients or daily task
 	 *
 	 */
-	public function optimize(): void
+	public function optimize(bool $full=true, int $limit=10000): void
 	{
-		if (! $this->db ) return;
+		if (! $this->use_db ) return;
 
 		$start_time = microtime( true );
+
+		$optimize = ($full) ? "VACUUM;" : "PRAGMA incremental_vacuum;";
+		$optimize = "PRAGMA wal_checkpoint(RESTART);" .
+					$optimize .
+					"PRAGMA optimize;";
+
 		$retries = 0;
 		while ( ++$retries <= $this->max_retries ) {
 			try {
-				$this->db->beginTransaction();
-				$count = $this->db->exec("
-					DELETE FROM wp_cache WHERE expire > 0 AND expire < {$this->time_now};
+				$this->use_db->beginTransaction();
+				$count = $this->use_db->exec("
+					DELETE FROM wp_cache WHERE expire > 0 AND expire < {$this->time_now} LIMIT {$limit};
 				");
-				$this->db->commit();
+				$this->use_db->commit();
 				// cannot VACUUM from within a transaction
-				$this->db->exec("
-					PRAGMA auto_vacuum = INCREMENTAL;
-					VACUUM;
-					PRAGMA optimize;
-				");
-				$message = sprintf("cache optimization deleted %d rows before vacuum/optimize (%01.4f)", $count, microtime( true ) - $start_time);
+				$this->use_db->exec($optimize);
+				$message = sprintf("SQLite optimization deleted %d rows (%01.4f)", $count, microtime( true ) - $start_time);
 				$this->error_log(__CLASS__,$message);
 				break;
 			} catch ( Exception $ex ) {
-				$this->db->rollback();
+				$this->use_db->rollback();
 				$this->error_log(__METHOD__,$ex);
 				usleep($this->sleep_time);
 			}
@@ -2189,13 +2459,19 @@ class WP_Object_Cache
 		$message = $message.$trace;
 
 		if ($this->log_errors) {
-			do_action( "qm/{$class}", $source.': '.$message );
-			do_action( "eacDoojigger_log_{$class}",$message,$source );
+			if (defined('QM_VERSION') && ( !defined('QM_DISABLED') || !QM_DISABLED )) {
+				do_action( "qm/{$class}", $source.': '.$message );
+			}
+			if (defined('EACDOOJIGGER_VERSION')) {
+				do_action( "eacDoojigger_log_{$class}",$message,$source );
+			}
 		}
 
-		$class = "E_USER_".strtoupper($class);
-		if (defined($class) && (constant($class) & error_reporting())) {
-			\error_log($source.': '.$message);
+		if ($this->log_errors || $class == 'error') {
+			$level = "E_USER_".strtoupper($class);
+			if (defined($level) && (constant($level) & error_reporting())) {
+				\error_log($source.' '.$class.': '.$message);
+			}
 		}
 	}
 
@@ -2206,27 +2482,31 @@ class WP_Object_Cache
 
 
 	/**
-	 * Update counters
+	 * Update runtime counters.
 	 *
 	 * @param string $countId the counter to update
 	 * @param int|bool $n the count to add (+1)
 	 * @param string $groupId also update the group counter
 	 */
-	private function addStats(string $countId, $n, string $groupId=null)
+	private function addRuntimeStats(string $countId, $n, string $groupId=null)
 	{
-		if ($countId) {
-			if (!isset($this->cache_stats[$countId])) {
-				$this->cache_stats[$countId] = 0;
+		if ((int)$n)
+		{
+			if ($countId) {
+				if (!isset($this->stats_runtime[$countId])) {
+					$this->stats_runtime[$countId] = 0;
+				}
+				$this->stats_runtime[$countId] += (int)$n;
 			}
-			$this->cache_stats[$countId] += (int)$n;
-		}
-		if ($groupId) {
-			if (!isset($this->group_stats[$groupId])) {
-				$this->group_stats[$groupId] = 0;
+			if ($groupId) {
+				if (!isset($this->stats_groups[$groupId])) {
+					$this->stats_groups[$groupId] = 0;
+				}
+				$this->stats_groups[$groupId] += (int)$n;
 			}
-			$this->group_stats[$groupId] += (int)$n;
 		}
 	}
+
 
 
 	/**
@@ -2235,16 +2515,18 @@ class WP_Object_Cache
 	 *
 	 * Gives the cache hits, and cache misses. Also prints every cached group,
 	 * key and the data.
+	 *
+	 * @param bool $full include APCu & db
 	 */
-	public function stats(): void
+	public function stats(bool $full=false): void
 	{
-		$stats = $this->getStats();
+		$stats = $this->getStats($full);
 
 		echo "<p>";
-		echo "<strong>Cache Hits:</strong> ".number_format($this->cache_stats['cache hits'],0)."<br />";
-		echo "<strong>Cache Misses:</strong> ".number_format($this->cache_stats['cache misses'])."<br />";
+		echo "<strong>Cache Hits:</strong> ".number_format($this->stats_runtime['cache hits'],0)."<br />";
+		echo "<strong>Cache Misses:</strong> ".number_format($this->stats_runtime['cache misses'])."<br />";
 		echo "<strong>Cache Ratio:</strong> ".
-			esc_attr( $this->cache_hit_ratio($this->cache_stats['cache hits'],$this->cache_stats['cache misses']) );
+			esc_attr( $this->cache_hit_ratio($this->stats_runtime['cache hits'],$this->stats_runtime['cache misses']) );
 		echo "</p>\n";
 
 		echo "<p><strong>Cache Counts:</strong></p><ul>";
@@ -2254,17 +2536,41 @@ class WP_Object_Cache
 					 ' - ' . number_format( $cache[0], 0 );
 			}
 		}
-
 		echo "</ul>\n";
-		echo "<p><strong>Cache Groups:</strong></p><ul>";
-		foreach ($stats['cache-groups'] as $group => $cache) {
-			if ($cache && $cache[0]) {
-				echo '<li>' . esc_attr( $group ) .
-					 ' - ' . number_format( $cache[0], 0 ).
-					 ' ( ' . number_format( $cache[1] / KB_IN_BYTES, 2 ) . 'k )</li>';
+
+		if ($full && isset($stats['cache-groups'])) {
+			echo "<p><strong>Cache Groups:</strong></p><ul>";
+			foreach ($stats['cache-groups'] as $group => $cache) {
+				if ($cache && $cache[1]) {
+					echo '<li>' . esc_attr( $group ) .
+						 ' - ' . number_format( $cache[1], 0 ).
+						 ' ( ' . number_format( $cache[2] / KB_IN_BYTES, 0 ) . 'k )</li>';
+				}
+			}
+			echo "</ul>\n";
+		}
+
+		if ($full && isset($stats['apcu-groups'])) {
+			echo "<p><strong>APCu Lifetime:</strong></p><ul>";
+			foreach ($stats['apcu-groups'] as $group => $cache) {
+				if ($cache && $cache[1]) {
+					echo '<li>' . esc_attr( $group ) .
+						 ' - ' . number_format( $cache[1], 0 ).
+						 ' ( ' . number_format( $cache[2] / KB_IN_BYTES, 0 ) . 'k )</li>';
+				}
 			}
 		}
-		echo "</ul>\n";
+
+		if ($full && isset($stats['database-groups'])) {
+			echo "<p><strong>SQLite DB:</strong></p><ul>";
+			foreach ($stats['database-groups'] as $group => $cache) {
+				if ($cache && $cache[1]) {
+					echo '<li>' . esc_attr( $group ) .
+						 ' - ' . number_format( $cache[1], 0 ).
+						 ' ( ' . number_format( $cache[2] / KB_IN_BYTES, 0 ) . 'k )</li>';
+				}
+			}
+		}
 
 		echo "<p>* ".esc_attr(self::PLUGIN_NAME)." v".esc_attr(EAC_OBJECT_CACHE_VERSION)."</p>\n";
 	}
@@ -2276,11 +2582,12 @@ class WP_Object_Cache
 	 * Gives the cache hits, and cache misses. Also prints every cached group,
 	 * key and the data.
 	 *
+	 * @param bool $full include APCu & db
 	 * @param bool $useSample use last sampling
 	 */
-	public function htmlStats($useSample = false): void
+	public function htmlStats(bool $full=false, bool $useSample = false): void
 	{
-		$stats = ($useSample) ? $this->getLastSample() : $this->getStats();
+		$stats = ($useSample) ? $this->getLastSample() : $this->getStats($full);
 
 		echo "\n<div class='wp-object-cache'>";
 
@@ -2306,26 +2613,46 @@ class WP_Object_Cache
 			}
 		}
 
-		if (isset($stats['cache-groups'])) {
-			echo "\n<tr><th colspan='4'><p>L1 (In-Memory) Cache Groups:</p></th></tr>";
+		if ($full && isset($stats['cache-groups'])) {
+			echo "\n<tr><th colspan='4'><p>L1 (Memory Cache):</p></th></tr>";
 			foreach ($stats['cache-groups'] as $name => $value) {
 				if ($value && $value[0]) {
 					echo '<tr><th>'.esc_attr( $name ).'</th>'.
-						 '<td>'	 .number_format( $value[0], 0) . '</td>'.
-						 '<td> ~'.number_format( $value[1] / KB_IN_BYTES, 2 ) . 'k</td>'.
-						 '<td> +'.number_format( $value[2], 0 ) . '</td></tr>';
+						 '<td> +' .number_format( $value[0], 0) . '</td>';
+					echo ($value[1])
+						? '<td>'  .number_format( $value[1], 0 ) . '</td>'
+						: '<td></td>';
+					echo ($value[2])
+						? '<td> ~'.number_format( $value[2] / KB_IN_BYTES, 2 ) . 'k</td></tr>'
+						: '<td></td></tr>';
 				}
 			}
 		}
 
-		if (isset($stats['database-groups'])) {
-			echo "\n<tr><th colspan='4'><p>L2 (Persistent) Cache Groups:</p></th></tr>";
-			foreach ($stats['database-groups'] as $name => $value) {
+		if ($full && isset($stats['apcu-groups'])) {
+			echo "\n<tr><th colspan='4'><p>L2 (APCu Cache):</p></th></tr>";
+			foreach ($stats['apcu-groups'] as $name => $value) {
 				if ($value && $value[0]) {
 					echo '<tr><th>'.esc_attr( $name ).'</th>'.
-						 '<td>'	 .number_format( $value[0], 0) . '</td>'.
-						 '<td> ~'.number_format( $value[1] / KB_IN_BYTES, 2 ) . 'k</td>'.
-						 '<td></td></tr>';
+					//	 '<td> +'.number_format( $value[0], 0) . '</td>'.
+						 '<td>-</td>'.
+						 '<td>'  .number_format( $value[1], 0) . '</td>'.
+						 '<td> ~'.number_format( $value[2] / KB_IN_BYTES, 2  ) . 'k</td></tr>';
+				}
+			}
+		}
+
+		if ($full && isset($stats['database-groups'])) {
+			echo "\n<tr><th colspan='4'><p>L2 (SQLite Cache):</p></th></tr>";
+			foreach ($stats['database-groups'] as $name => $value) {
+				if ($value && $value[1]) {
+					echo '<tr><th>'.esc_attr( $name ).'</th>'.
+					//	 '<td> +'.number_format( $value[0], 0) . '</td>'.
+						 '<td>-</td>'.
+						 '<td>'  .number_format( $value[1], 0) . '</td>';
+					echo ($value[2])
+						? '<td> ~'.number_format( $value[2] / KB_IN_BYTES, 2 ) . 'k</td></tr>'
+						: '<td></td></tr>';
 				}
 			}
 		}
@@ -2340,48 +2667,57 @@ class WP_Object_Cache
 	 * Gives the cache hits, and cache misses. Also prints every cached group,
 	 * key and the data.
 	 *
+	 * @param bool $full include APCu & db
 	 * @return array
 	 */
-	public function getStats(): array
+	public function getStats(bool $full=false): array
 	{
-		static $stats = [];
-		if (!empty($stats)) return $stats;
-
-		do_action( 'qm/start', __METHOD__ );
-
 		$this->write_cache();
 
 		$stats = array();
 		$stats['id'] = array(
 			self::PLUGIN_NAME	=> EAC_OBJECT_CACHE_VERSION,
-			'cache file'		=> ($this->db)
+			'cache file'		=> ($this->use_db)
 					? '~/'.trailingslashit(basename($this->cache_dir)) . $this->cache_file
 					: 'memory-only',
-			'peak memory used'	=> round((memory_get_peak_usage(false) / MB_IN_BYTES)).'M of '.ini_get('memory_limit'),
-			'sample time'		=> wp_date('c'),
+			'peak memory used'	=> round((memory_get_peak_usage(false) / MB_IN_BYTES),1).'M of '.ini_get('memory_limit'),
 		);
+
+		if ($this->use_apcu) {
+			$apcu = apcu_cache_info(true);
+			$stats['id']['APCu memory used'] = round(($apcu['mem_size'] / MB_IN_BYTES),1).'M of '.ini_get('apc.shm_size');
+		}
+
 		if (isset($_SERVER['REQUEST_URI'])) {
 			$stats['id']['sample uri']	= sanitize_url( $_SERVER['REQUEST_URI'] );
 		}
+		$stats['id']['sample time']		= wp_date('c');
 
-		// addStats() counters
+		// addRuntimeStats() counters
 		$stats['cache'] 				= $this->getStatsCache();
 
-		// current cache contents by group
-		$stats['cache-groups'] 			= $this->getStatsGroups();
+		if ($full)
+		{
+			// current cache contents by group
+			$stats['cache-groups'] 			= $this->getStatsGroups();
 
-		// database contents - all groups
-		if ($this->db) {
-			$stats['database-groups'] 	= $this->getStatsDB();
+			// APCu contents
+			if ($this->use_apcu) {
+				$stats['apcu-groups'] 		= $this->getStatsAPCu();
+			}
+
+			// database contents - all groups
+			if ($this->use_db) {
+				$stats['database-groups'] 	= $this->getStatsDB();
+			}
 		}
 
-		do_action( 'qm/stop', __METHOD__ );
 		return $stats;
 	}
 
 
 	/**
-	 * Returns the current cache stats..
+	 * Returns the current cache stats.
 	 *
 	 * @param bool $log add Query Monitor/eacDoojigger logging
 	 * @return array
@@ -2390,33 +2726,49 @@ class WP_Object_Cache
 	{
 		$stats = array();
 
-		$this->cache_stats["L2 pre-fetched (-)"] = array_sum($this->L2_missed_stats);
+		$this->stats_runtime["pre-fetched (-)"] = $this->stats_premissed[$this->get_blog_id('*')] ?? 0;
 
-		foreach ($this->cache_stats as $name => $count) {
+		foreach ($this->stats_runtime as $name => $count) {
 			$stats[$name] = [$count,''];
 		}
+
 		// add cache hit ratios
 		$stats['cache hits'][1] =
-			$this->cache_hit_ratio($this->cache_stats['cache hits'],$this->cache_stats['cache misses']);
+			$this->cache_hit_ratio($this->stats_runtime['cache hits'],$this->stats_runtime['cache misses']);
 		$stats['L1 cache hits'][1] =
-			$this->cache_hit_ratio($this->cache_stats['L1 cache hits'],$this->cache_stats['L1 cache misses']);
-		$stats['L2 cache hits'][1] =
-			$this->cache_hit_ratio($this->cache_stats['L2 cache hits'],$this->cache_stats['L2 cache misses']);
+			$this->cache_hit_ratio($this->stats_runtime['L1 cache hits'],$this->stats_runtime['L1 cache misses']);
+		$stats['L2 APCu hits'][1] =
+			$this->cache_hit_ratio($this->stats_runtime['L2 APCu hits'],$this->stats_runtime['L2 APCu misses']);
+		$stats['L2 SQL hits'][1] =
+			$this->cache_hit_ratio($this->stats_runtime['L2 SQL hits'],$this->stats_runtime['L2 SQL misses']);
 
-		if ($log) {
-			$qmlog =  __CLASS__." on ".current_action()."\n";
-			foreach ($stats as $group => $cache) {
-				if ($cache && $cache[0]) {
-					$qmlog .= "\t" . esc_attr( $group ) . ': ' . number_format( $cache[0], 0 ) . "\n";
+		if ($log)
+		{
+			if (defined('QM_VERSION') && ( !defined('QM_DISABLED') || !QM_DISABLED )) {
+				$qmlog =  __CLASS__." on ".current_action()."\n";
+				foreach ($stats as $group => $cache) {
+					if ($cache && $cache[0]) {
+						$qmlog .= "\t" . esc_attr( $group ) . ': ' . number_format( $cache[0], 0 ) . "\n";
+					}
 				}
+				do_action( 'qm/info', $qmlog );
 			}
-			do_action( 'qm/info', $qmlog );
-			$qmlog = 'cache hits: ' . number_format( $stats['cache hits'][0], 0).', ' .
-					 '(L1: ' 		. number_format( $stats['L1 cache hits'][0], 0).', ' .
-					 'L2: ' 		. number_format( $stats['L2 cache hits'][0], 0).'), ' .
-					 'misses: ' 	. number_format( $stats['cache misses'][0], 0).', ' .
-					 'ratio: ' 		. $stats['cache hits'][1];
-			do_action("eacDoojigger_log_notice",$qmlog,__CLASS__);
+			if (defined('EACDOOJIGGER_VERSION')) {
+				$qmlog = 'cache hits: ' . number_format( $this->stats_runtime['cache hits'], 0).', ' .
+						 '(L1: ' 		. number_format( $this->stats_runtime['L1 cache hits'], 0).', ';
+				if ($this->use_apcu) {
+					$qmlog .=
+						'APCu: ' 		. number_format( $this->stats_runtime['L2 APCu hits'], 0).', ';
+				}
+				if ($this->use_db) {
+					$qmlog .=
+						 'L2: ' 		. number_format( $this->stats_runtime['L2 SQL hits'], 0);
+				}
+				$qmlog = ltrim($qmlog,', ').'), '.
+						 'misses: ' 	. number_format( $this->stats_runtime['cache misses'], 0).'}, ' .
+						 'ratio: ' 		. $stats['cache hits'][1];
+				do_action("eacDoojigger_log_notice",$qmlog,__CLASS__);
+			}
 		}
 
 		return $stats;
@@ -2424,7 +2776,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * Returns the current cache stats..
+	 * Returns the current cache stats by group.
 	 *
 	 * @return array
 	 */
@@ -2432,17 +2784,19 @@ class WP_Object_Cache
 	{
 		$stats = array();
 
-		foreach ( $this->L1_cache as $group => $cache ) {
-			$cache = array_filter($cache, function($v){return $v !== false;});
-			$stat = $this->group_stats[$group] ?? 0;
-			if (!empty($cache) && $stat > 0) {
-				$count = count($cache);
-				$size = 0;
+		foreach($this->stats_groups as $group => $hits) {
+			$count = $size = 0;
+			if ($cache = $this->L1_cache[$group] ?? false) {
 				foreach ($cache as $k => $v) {
-					$size += (strlen($k)+strlen(maybe_serialize($v)));
+					$count++;
+					if (is_array($v)) {
+						$size += (strlen($k)+strlen(maybe_serialize($v)));
+					} else {
+						$size += (strlen($k)+1);
+					}
 				}
-				$stats[$group] = [$count, $size, $stat];
 			}
+			$stats[$group] = [$hits, $count, $size];
 		}
 		ksort($stats);
 		$stats['Total'] = [
@@ -2456,38 +2810,70 @@ class WP_Object_Cache
 
 
 	/**
+	 * Returns the stats of the L2 APCu cache.
+	 *
+	 * @return array
+	 */
+	public function getStatsAPCu(): array
+	{
+		if ($this->use_apcu)
+		{
+			$apcu_key = preg_quote($this->get_apcu_key());
+			if ($this->is_multisite && !is_network_admin()) {
+				$apcu_key .= sprintf(".+\|00000|%05d\|", $this->get_blog_id('*'));
+			}
+			$keys = new APCUIterator('/^'.$apcu_key.'/');
+			return ['Total' =>
+				[
+					$keys->getTotalHits(),
+					$keys->getTotalCount(),
+					$keys->getTotalSize(),
+				]
+			];
+		}
+		return ['Total'=>[0,0,0]];
+	}
+
+
+	/**
 	 * Returns the stats of the L2 database.
 	 *
 	 * @return array
 	 */
 	public function getStatsDB(): array
 	{
-		if (!$this->db) return ['Total'=>[0,0,0]];
+		$stats = array( 'Total' => [0,0,0,0] );
 
-		$stats = array();
+		if (!$this->use_db) return $stats;
 
 		$blog_id = sprintf("%05d", $this->blog_id);
-		if ($result = $this->db->query("
+		$key_like = ($this->is_multisite && !is_network_admin())
+			? "AND (key LIKE '%|00000|%' or key LIKE '%|{$blog_id}|%')"
+			: "";
+		if ($result = $this->use_db->query("
 			SELECT SUBSTR(key,0,INSTR(key,'|')) as name,
 				   SUBSTR(key,INSTR(key,'|')+1,5) as blog,
 				   COUNT(*) as count,
-				   SUM(LENGTH(key)*2 + LENGTH(value) + LENGTH(expire)*2) as size
+				   SUM(LENGTH(key)*2 + LENGTH(value) + LENGTH(expire) + 4) as size
 			FROM wp_cache
-			 WHERE (expire = 0 OR expire >= {$this->time_now})
-			  AND (key LIKE '%|00000|%' or key LIKE '%|{$blog_id}|%')
+			 WHERE (expire = 0 OR expire >= {$this->time_now}) {$key_like}
 			 GROUP BY name;"))
 		{
 			while ($row = $result->fetch()) {
-				$stats[ $row['name'] ] = [$row['count'], $row['size']];
+			//	$stats[ $row['name'] ] = [$row['count'], $row['size']];
+				$stats['Total'][1] += $row['count'];
+				$stats['Total'][2] += $row['size'];
 			}
 			$result->closeCursor();
-			ksort($stats);
+		//	ksort($stats);
+		//	$stats['Total'] = [
+		//	/* hits */	0,
+		//	/* count */ array_sum(array_column($stats,0)),
+		//	/* size */ 	array_sum(array_column($stats,1)),
+		//				filesize($cacheName),
+		//	];
 			$cacheName	= trailingslashit($this->cache_dir) . $this->cache_file;
-			$stats['Total'] = [
-				array_sum(array_column($stats,0)),
-				array_sum(array_column($stats,1)),
-				filesize($cacheName),
-			];
+			$stats['Total'][3] = filesize($cacheName);
 		}
 
 		return $stats;
@@ -2495,7 +2881,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * Returns the cache hit ratio (formatted)
+	 * Returns the cache hit ratio (formatted).
 	 *
 	 * @param int $hits number of hits
 	 * @param int $misses number of misses
@@ -2518,7 +2904,7 @@ class WP_Object_Cache
 		if ( $row = $this->get_cache( "sample", self::GROUP_ID ) ) {
 			return $row;
 		}
-		return $this->getStats();
+		return $this->getStats(true);
 	}
 
 
@@ -2528,7 +2914,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * install (from connect for new db file)
+	 * Install (from connect for new db file).
 	 *
 	 * @param string $cacheName path to sqlite file
 	 */
@@ -2540,7 +2926,7 @@ class WP_Object_Cache
 		$retries = 0;
 		while ( ++$retries <= $this->max_retries ) {
 			try {
-				$this->db->exec(
+				$this->use_db->exec(
 					"CREATE TABLE IF NOT EXISTS wp_cache (".
 					"key TEXT NOT NULL COLLATE BINARY PRIMARY KEY, value BLOB, expire INT".
 					") WITHOUT ROWID;".
@@ -2554,14 +2940,15 @@ class WP_Object_Cache
 		}
 
 		// don't use $this->error_log before instantiated
-		$message = __CLASS__.': L2 cache initialized';
+		$message = __CLASS__.': SQLite cache initialized';
 		\error_log($message);
 		return true;
 	}
 
 
 	/**
-	 * uninstall (from external extension)
+	 * Uninstall (from external extension).
+	 * Called for each site in multisite environment.
 	 *
 	 * @param bool $complete delete the cache file
 	 */
@@ -2569,6 +2956,7 @@ class WP_Object_Cache
 	{
 		$this->wp_transients( 'export', $this->blog_id );
 		if ($complete) {
+			$this->delete_cache_APCu();
 			$this->delete_cache_file();
 			wp_using_ext_object_cache( false );
 		}
@@ -2577,7 +2965,8 @@ class WP_Object_Cache
 
 
 	/**
-	 * alias to uninstall (from external extension / scheduled event)
+	 * Alias to uninstall (from external extension / scheduled event).
+	 * Called for each site in multisite environment.
 	 *
 	 */
 	public function rebuild_object_cache(bool $complete = true): bool
@@ -2592,23 +2981,73 @@ class WP_Object_Cache
 
 
 	/**
-	 * import/export WP MySQL transients
+	 * Get WP/MySQL transient.
+	 * May come from cached 'alloptions' or 'options' or options table
+	 *
+	 */
+	private function get_transient($transient)
+	{
+		wp_using_ext_object_cache( false );
+		$value = \get_transient( $transient );
+		wp_using_ext_object_cache( true );
+
+		if ($value) {
+			$transient_timeout = '_transient_timeout_' . $transient;
+			if ($expire = get_option( $transient_timeout ) ?: 0) {
+				$expire = $expire - $this->time_now;
+			}
+			$this->addRuntimeStats('transients imported',1);
+			$this->set($transient,$value,'transient',$expire);
+		}
+
+		return $value;
+	}
+
+
+	/**
+	 * Get WP/MySQL site transient.
+	 * May come from cached 'alloptions' or 'options' or sitemeta table
+	 *
+	 */
+	private function get_site_transient($transient)
+	{
+		wp_using_ext_object_cache( false );
+		$value = \get_site_transient( $transient );
+		wp_using_ext_object_cache( true );
+
+		if ($value) {
+			$transient_timeout = '_site_transient_timeout_' . $transient;
+			if ($expire = get_site_option( $transient_timeout ) ?: 0) {
+				$expire = $expire - $this->time_now;
+			}
+			$this->addRuntimeStats('site transients imported',1);
+			$this->set($transient,$value,'site-transient',$expire);
+		}
+
+		return $value;
+	}
+
+
+	/**
+	 * MySQL transient import/export.
 	 *
 	 */
 	private function wp_transients(string $action, int $blog_id): int
 	{
 		switch ($action) {
+		/*
 			case 'import':
 				if ($this->get_defined_option("disable_transient_import", 'is_bool')) return false;
 				if ($count = $this->import_wp_transients()) {
-					$this->cache_stats['transients imported'] = 0;
+					$this->stats_runtime['transients imported'] = 0;
 					$this->error_log(__CLASS__,sprintf("%d transients imported",$count));
 				}
 				return $count;
+		*/
 			case 'export':
 				if ($this->get_defined_option("disable_transient_export", 'is_bool')) return false;
 				if ($count = $this->export_wp_transients()) {
-					$this->cache_stats['transients exported'] = 0;
+					$this->stats_runtime['transients exported'] = 0;
 					$this->error_log(__CLASS__,sprintf("%d transients exported",$count));
 				}
 				return $count;
@@ -2618,15 +3057,16 @@ class WP_Object_Cache
 
 
 	/**
-	 * import existing MySQL transients
+	 * Import existing MySQL transients.
 	 *
 	 */
 	private function import_wp_transients(): int
 	{
+/*
 		global $wpdb;
 
 		// do we have db connections
-		if (! $this->db || ! $wpdb) return 0;
+		if (! $wpdb) return 0;
 
 		// see if we've done this already
 		if ( $this->get_cache( 'imported-transients', self::GROUP_ID ) ) {
@@ -2639,12 +3079,7 @@ class WP_Object_Cache
 		// write all in one transaction
 		$this->set_delayed_writes( true );
 
-		// so we don't try to use this cache
-	//	wp_using_ext_object_cache( false );
-	//	$installing = wp_installing( true );
-
 		// import transients from options table
-
 		$optionSQL =
 			"SELECT option_name as name, option_value as value".
 			" FROM {$wpdb->options} WHERE option_name LIKE '%s' AND option_name NOT LIKE '%s'";
@@ -2661,7 +3096,6 @@ class WP_Object_Cache
 		}
 
 		// import site transients from options or sitemeta table
-
 		$siteSQL = ($this->is_multisite)
 			? "SELECT meta_key as name, meta_value as value".
 			  " FROM {$wpdb->sitemeta} WHERE meta_key LIKE '%s' AND meta_key NOT LIKE '%s'"
@@ -2678,24 +3112,23 @@ class WP_Object_Cache
 			mysqli_free_result($transients);
 		}
 
-	//	wp_installing( $installing );
-	//	wp_using_ext_object_cache( true );
-
-		$this->set('imported-transients', [ wp_date('c'),$this->cache_stats['transients imported'] ], self::GROUP_ID, 0);
+		$this->set('imported-transients', [ wp_date('c'),$this->stats_runtime['transients imported'] ], self::GROUP_ID, 0);
 		$this->set_delayed_writes();
 
-		return $this->cache_stats['transients imported'] ?? 0;
+		return $this->stats_runtime['transients imported'] ?? 0;
+*/
 	}
 
 
 	/**
-	 * pull a single transient from WP
+	 * Pull a single transient from WP.
 	 *
 	 * @param object $row transient record
 	 * @param string $group 'transient' or 'site-transient'
 	 */
 	private function pull_wp_transient(object $row, string $group): void
 	{
+/*
 		global $wpdb;
 		static $optionSQL = null;
 		static $siteSQL = null;
@@ -2737,48 +3170,72 @@ class WP_Object_Cache
 		}
 
 		$this->set($key, maybe_unserialize($row->value), $group, $expire);
-		$this->addStats('transients imported',1);
+		$this->addRuntimeStats('transients imported',1);
+*/
 	}
 
 
 	/**
-	 * export existing transients back to MySQL
+	 * Export existing transients back to MySQL.
 	 *
 	 */
 	private function export_wp_transients(): int
 	{
-		if (! $this->db) return 0;
-		$this->write_cache();
+		$rows = [];
+
+		$blogkeys = [];
+		foreach (['transient','transient:prefetch'] as $group) {
+			$blogkeys[$group] = [$this->get_blog_key('%',$group)];
+		}
+
+		if (!$this->is_multisite || $this->blog_id == get_main_site_id()) {
+			foreach (['site-transient','site-transient:prefetch'] as $group) {
+				$blogkeys[$group] = [$this->get_blog_key('%',$group)];
+			}
+		}
+
+		// get DB transients
+		if ($this->use_db)
+		{
+			$this->write_cache();
+
+			while ($row = $this->select_each($blogkeys,true,false)) {
+				$rows[ "{$row['group']}|{$row['blog']}|{$row['key']}" ] = $row;
+			}
+		}
+
+		// get APCu transients
+		foreach($blogkeys as $group => $blogkey)
+		{
+			$blogid = $this->get_blog_id($group);
+			if ($apcu_key = $this->get_apcu_key( $group, $blogid ))
+			{
+				$keys = new APCUIterator('/^'.preg_quote($apcu_key,'/').'/');
+				foreach( $keys as $data ) { // key,value
+					if ( ($row = $this->parse_key($data['key'])) && is_array($data['value']) ) {
+						$rows[ "{$row['group']}|{$row['blog']}|{$row['key']}" ] = array_merge($row,$data['value']);
+					}
+				}
+			}
+		}
 
 		// so we don't try to use this cache
 		wp_using_ext_object_cache( false );
 		$suspended  = wp_suspend_cache_addition(true);
 
-		$blogkeys = [
-				'transient' 				=> [$this->get_valid_key('%','transient')],
-				'transient:prefetch' 		=> [$this->get_valid_key('%','transient:prefetch')],
-		];
-
-		if (!$this->is_multisite || $this->blog_id == get_main_site_id()) {
-			$blogkeys = array_merge($blogkeys, [
-				'site-transient' 			=> [$this->get_valid_key('%','site-transient')],
-				'site-transient:prefetch' 	=> [$this->get_valid_key('%','site-transient:prefetch')],
-			]);
-		}
-
-		while ($row = $this->select_each($blogkeys,true)) {
+		foreach($rows as $row) {
 			$this->push_wp_transient($row);
 		}
 
 		wp_suspend_cache_addition($suspended);
 		wp_using_ext_object_cache( true );
 
-		return $this->cache_stats['transients exported'] ?? 0;
+		return $this->stats_runtime['transients exported'] ?? 0;
 	}
 
 
 	/**
-	 * push a single transient to WP
+	 * Push a single transient to WP.
 	 *
 	 * @param object $row transient record
 	 */
@@ -2795,7 +3252,7 @@ class WP_Object_Cache
 					set_site_transient($row['key'],$row['value'],$row['expire']);
 					break;
 			}
-			$this->addStats('transients exported',1);
+			$this->addRuntimeStats('transients exported',1);
 		}
 	}
 }
@@ -2806,3 +3263,4 @@ class WP_Object_Cache
  * WP_PLUGIN_DIR not yet set
  */
 require __DIR__.'/plugins/eacobjectcache/src/wp-cache.php';
+

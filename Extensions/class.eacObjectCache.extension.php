@@ -18,7 +18,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '25.0410.1';
+		const VERSION	= '25.0926.1';
 
 		/**
 		 * @var string to set default tab name
@@ -57,10 +57,17 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 			if ( ! parent::initialize() ) return; // disabled
 
 			global $wp_object_cache;
+
 			$wp_object_cache->display_stats 	= (int)$this->get_option('object_cache_stats',$wp_object_cache->display_stats);
-			$wp_object_cache->delayed_writes 	= (int)$this->get_option('object_cache_delayed_writes',$wp_object_cache->delayed_writes);
+			$wp_object_cache->log_stats 		= (
+				(defined('QM_VERSION') && (!defined('QM_DISABLED') || !QM_DISABLED )) ||
+				(defined('EACDOOJIGGER_VERSION')) // if we're here, this is true
+			);
+
 		//	$wp_object_cache->display_errors 	= $this->is_admin();
-			$wp_object_cache->log_errors 		= true;
+			$wp_object_cache->log_errors 		= $wp_object_cache->log_stats;
+
+			$wp_object_cache->delayed_writes 	= (int)$this->get_option('object_cache_delayed_writes',$wp_object_cache->delayed_writes);
 		}
 
 

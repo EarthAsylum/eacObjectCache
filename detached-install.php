@@ -2,7 +2,7 @@
 namespace EarthAsylumConsulting;
 
 /**
- * {eac}Doojigger Object Cache - a persistent object cache using a SQLite database to cache WordPress objects
+ * {eac}ObjectCache - a light-weight and efficient persistent object cache using APCu & SQLite to cache WordPress objects.
  *
  * Detached installer. Used only when {eac}Doojigger is not active.
  * Installs/Uninstalls object-cache.php to/from /wp-content.
@@ -12,7 +12,7 @@ namespace EarthAsylumConsulting;
  * @author		Kevin Burkholder <KBurkholder@EarthAsylum.com>
  * @copyright	Copyright (c) 2025 EarthAsylum Consulting <www.earthasylum.com>
  *
- * @version 25.0408.1
+ * @version 25.0929.1
  */
 
 defined( 'ABSPATH' ) || exit;
@@ -49,13 +49,15 @@ add_action( 'admin_footer', function()
 		$message = '<p><strong>{eac}ObjectCache</strong> expects and is fully functional only when installed along with '.
 				   '<a href="https://eacdoojigger.earthasylum.com/eacdoojigger" target="_blank">{eac}Doojigger</a>.</p>';
 		if (get_transient('eac_object_cache') == 'activated') {
-			$message .= '<p>The object cache has been installed in detached mode in the /'.$wp_content_dir.' folder.</p>';
+			$message .= '<p>However, the object cache has been installed in detached mode in the /'.$wp_content_dir.' folder. '.
+				   'Please review the <a href="https://eacdoojigger.earthasylum.com/eacobjectcache" target="_blank">readme document</a> to customize settings for your environment.</p>';
 			echo '<div class="notice notice-warning is-dismissible">'.$message.'</div>';
 			delete_transient('eac_object_cache');
 		} else if (!is_file(WP_CONTENT_DIR.'/object-cache.php')) {
 			$message .= '<p>You may copy the <em>object-cache.php</em> file '.
 						'from the plugin <em>/src</em> folder to the <em>/'.$wp_content_dir.'</em> folder '.
-						'to activate the object cache in detached mode.</p>';
+						'to activate the object cache in detached mode.</p>'.
+				   '<p>Please review the <a href="https://eacdoojigger.earthasylum.com/eacobjectcache" target="_blank">readme document</a> to customize settings for your environment.</p>';
 			echo '<div class="notice notice-warning is-dismissible">'.$message.'</div>';
 		}
 	}

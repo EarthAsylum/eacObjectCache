@@ -2,7 +2,7 @@
 namespace EarthAsylumConsulting;
 
 /**
- * {eac}ObjectCache - a persistent object cache using a SQLite database to cache WordPress objects.
+ * {eac}ObjectCache - a light-weight and efficient persistent object cache using APCu & SQLite to cache WordPress objects.
  *
  * @category	WordPress Plugin
  * @package		{eac}ObjectCache\{eac}Doojigger Extensions
@@ -12,11 +12,11 @@ namespace EarthAsylumConsulting;
  *
  * @wordpress-plugin
  * Plugin Name:			{eac}ObjectCache
- * Description:			{eac}ObjectCache - a light-weight and efficient persistent object cache that uses a fast SQLite database to cache WordPress objects.
- * Version:				1.4.1
+ * Description:			{eac}ObjectCache - a light-weight and efficient persistent object cache using APCu & SQLite to cache WordPress objects.
+ * Version:				2.0.0
  * Requires at least:	5.8
  * Tested up to:		6.8
- * Requires PHP:		7.4
+ * Requires PHP:		8.1
  * Plugin URI:			https://eacdoojigger.earthasylum.com/eacobjectcache/
  * Author:				EarthAsylum Consulting
  * Author URI:			http://www.earthasylum.com
@@ -62,7 +62,7 @@ class eacObjectCache
 					function($pluginLinks, $pluginFile, $pluginData) {
 						return array_merge(
 							[
-								'settings'		=> eacDoojigger::getSettingsLink($pluginData,'tools'),
+								'settings'		=> eacDoojigger::getSettingsLink($pluginData,'object-cache'),
 								'documentation'	=> eacDoojigger::getDocumentationLink($pluginData),
 								'support'		=> eacDoojigger::getSupportLink($pluginData),
 							],

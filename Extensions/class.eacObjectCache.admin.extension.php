@@ -18,7 +18,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '25.0603.1';
+		const VERSION	= '25.0930.1';
 
 		/**
 		 * @var string to set default tab name
@@ -76,7 +76,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 		 */
 		public function admin_options_settings(): void
 		{
-			$check = $this->checkForInstall('version');
+			$check = $this->checkForInstall('sqlite');
 
 			if ( $check !== true )
 			{
@@ -84,23 +84,99 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					[
 						'_sqlite_version' 	=> array(
 								'type'		=> 	'display',
-								'label'		=> 	'Object Cache',
+								'label'		=> 	'SQLite Object Cache',
 								'default'	=> 	$check['message'],
 						),
 					]
 				);
-				return;
+			//	return;
+			}
+			else
+			{
+				global $wp_object_cache;
+				$using = (defined('EAC_OBJECT_CACHE_USE_DB')) ? EAC_OBJECT_CACHE_USE_DB : true;
+				$using = ($using) ? 'Enabled' : '';
+				$stats = (defined('EAC_OBJECT_CACHE_VERSION')) ? $wp_object_cache->getStatsDB() : [[0,0]];
+				$stats = end($stats);
+				$disabled  = (is_multisite() && !$this->plugin->is_network_admin()) ? 'disabled' : false;
+				$this->registerExtensionOptions( self::TAB_NAME,
+					[
+						'_sqlite_version' 	=> array(
+								'type'		=> 	'switch',
+								'label'		=> 	'SQLite Database Cache',
+								'options'	=>	['Use SQLite Cache'=>'Enabled'],
+								'default'	=>	$using,
+								'title'		=> 	'SQLite Version '.\SQLite3::version()['versionString'],
+								'info'		=>	($stats[1]) ?
+												'<small>* The cache has '.
+												'<output style="color:blue;">'.number_format($stats[1],0).'</output>'.
+												' records using ~'.
+												'<output style="color:blue;">'.number_format($stats[2] / MB_IN_BYTES, 1).'MB</output>'.
+												' of storage in a '.
+												'<output style="color:blue;">'.number_format($stats[3] / MB_IN_BYTES, 1).'MB</output>'.
+												' database file.</small>'
+												: '',
+								'validate'	=>	[$this, 'validate_config_option'],
+								'attributes'=> 	($disabled) ? ['disabled'=>$disabled] : [],
+						),
+					]
+				);
 			}
 
-			$check = $this->checkForInstall('pdo');
+			$check = $this->checkForInstall('apcu');
 
 			if ( $check !== true )
 			{
 				$this->registerExtensionOptions( self::TAB_NAME,
 					[
-						'_pdo_missing' 		=> array(
+						'_apcu_version' 	=> array(
 								'type'		=> 	'display',
-								'label'		=> 	'PHP Configuration',
+								'label'		=> 	'APCu Memory Cache',
+								'default'	=> 	$check['message'],
+						),
+					]
+				);
+			//	return;
+			}
+			else
+			{
+				global $wp_object_cache;
+				$using = (defined('EAC_OBJECT_CACHE_USE_APCU')) ? EAC_OBJECT_CACHE_USE_APCU : true;
+				$using = ($using) ? 'Enabled' : '';
+				$stats = (defined('EAC_OBJECT_CACHE_VERSION')) ? $wp_object_cache->getStatsAPCu() : [[0,0]];
+				$stats = end($stats);
+				$disabled  = (is_multisite() && !$this->plugin->is_network_admin()) ? 'disabled' : false;
+				$this->registerExtensionOptions( self::TAB_NAME,
+					[
+						'_apcu_version' 	=> array(
+								'type'		=> 	'switch',
+								'label'		=> 	'APCu Memory Cache',
+								'title'		=> 	'APCu Version '.phpversion('apcu'),
+								'options'	=>	['Use APCu Cache'=>'Enabled'],
+								'default'	=>	$using,
+								'info'		=>	($stats[1]) ?
+												'<small>* The cache has '.
+												'<output style="color:blue;">'.number_format($stats[1],0).'</output>'.
+												' records using ~'.
+												'<output style="color:blue;">'.number_format($stats[2] / MB_IN_BYTES, 1).'MB</output>'.
+												' of memory.</small>'
+												: '',
+								'validate'	=>	[$this, 'validate_config_option'],
+								'attributes'=> 	($disabled) ? ['disabled'=>$disabled] : [],
+						),
+					]
+				);
+			}
+
+			$check = $this->checkForInstall('cache');
+
+			if ( $check !== true )
+			{
+				$this->registerExtensionOptions( self::TAB_NAME,
+					[
+						'_cache_missing' 		=> array(
+								'type'		=> 	'display',
+								'label'		=> 	'Object Cache',
 								'default'	=> 	$check['message'],
 						),
 					]
@@ -136,7 +212,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 								'label'		=> 	'Object Cache',
 								'default'	=> 	$default,
 								'info'		=>	$default.' the {eac}ObjectCache drop-in.'.
-												'<br/><small>* Requires write access to wp-content folder.</small>',
+												"<br/>* Requires write access to wp-content folder.",
 								'validate'	=>	[$this, 'install_object_cache'],
 						),
 					]
@@ -145,9 +221,6 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 
 			if (defined('EAC_OBJECT_CACHE_VERSION'))
 			{
-				global $wp_object_cache;
-				$stats = $wp_object_cache->getStatsDB();
-				$stats = $stats['Total'];
 				$this->registerExtensionOptions( self::TAB_NAME,
 					[
 						'_btnCacheFlush' 	=> array(
@@ -155,14 +228,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 								'label'		=> 	'Flush Objects',
 								'default'	=> 	'Erase Cache',
 								'tooltip'	=>	'Erase the persistent object cache.',
-								'info'		=>	'<small>* The cache has '.
-												'<output style="color:blue;">'.number_format($stats[0],0).'</output>'.
-												' records using over '.
-												'<output style="color:blue;">'.number_format($stats[1] / MB_IN_BYTES, 1).'MB</output>'.
-												' of storage in a '.
-												'<output style="color:blue;">'.number_format($stats[2] / MB_IN_BYTES, 1).'MB</output>'.
-												' database file.</small>',
-								'validate'	=>	'wp_cache_flush_blog',
+								'validate'	=>	[$this,'validate_config_option'],
 						),
 					]
 				);
@@ -179,9 +245,8 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 									'type'		=> 	'select',
 									'label'		=> 	'Rebuild Cache',
 									'options'	=> 	$schedules,
-									'info'		=>	'Rebuild the persistent object cache on a regular schedule. '.
-													'This keeps the cache at a reasonable size and prevents '.
-													'potential lock-ups on high-volumn sites or mult-site networks.',
+									'info'		=>	'Invalidate and rebuild the persistent object cache on a regular schedule. '.
+													'This keeps the cache at a reasonable size on high-volumn sites or mult-site networks.',
 							),
 						]
 					);
@@ -192,7 +257,6 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 						'object_cache_stats'	=> array(
 								'type'		=> 	'select',
 								'label'		=> 	'Sampling',
-						//		'options'	=>	[ 'Disabled'=>'','Use Current Request'=>'current','Use Last Sample'=>'sample' ],
 								'options'	=>  [
 													"Disabled"					=> 0,
 													"Each Request"				=> 1,
@@ -208,8 +272,6 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 												],
 								'default'	=>	'',
 								'info'		=> 	'Sample and display object cache counts in a notification block on administrator pages.',
-								// attributes are on <span> not <input>
-								//'attributes'=>	['onchange'=>'options_form.requestSubmit()'],
 						),
 					]
 				);
@@ -242,6 +304,36 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 							'label'		=> 	'<p><span class="dashicons dashicons-performance"></span></p>',
 							'default'	=>	'<p><strong>Advanced options update settings in the wp-config.php file.</strong></p>',
 					),
+				]
+			);
+			$usingAPCu = (defined('EAC_OBJECT_CACHE_USE_APCU')) ? EAC_OBJECT_CACHE_USE_APCU : true;
+			if ($usingAPCu && $this->checkForInstall('apcu') === true)
+			{
+				global $wp_object_cache;
+				$using = (defined('EAC_OBJECT_CACHE_OPTIMIZE_MEMORY')) ? EAC_OBJECT_CACHE_OPTIMIZE_MEMORY : false;
+				$using = ($using) ? 'Enabled' : '';
+				$this->registerExtensionOptions( self::TAB_NAME,
+					[
+						'_opt_memory' 		=> array(
+								'type'		=> 	'switch',
+								'label'		=> 	'Memory Optimization',
+								'options'	=>	['Optimize Memory'=>'Enabled'],
+								'default'	=>	$using,
+								'info'		=>	'Optimize memory usage between APCu shared memory and process memory, '.
+												'reducing per-process memory use.',
+								'help'		=> 	"When using APCu memory caching, optimize internal memory by not storing APCu data in the L1 memory cache. ".
+												"This may slightly increase processing time as most cache hits will come through APCu ".
+												"but will reduce the per-process memory usage.",
+								'validate'	=>	[$this, 'validate_config_option'],
+						),
+					]
+				);
+			}
+
+			$usingDB = (defined('EAC_OBJECT_CACHE_USE_DB')) ? EAC_OBJECT_CACHE_USE_DB : true;
+			if ($usingDB && $this->checkForInstall('sqlite') === true)
+			{
+				$this->registerExtensionOptions( self::TAB_NAME,[
 					'_mmap_size'			=> array(
 							'type'		=> 	'select',
 							'label'		=> 	'Memory Mapped I/O',
@@ -265,7 +357,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 
 					'_timeout'			=> array(
 							'type'		=> 	'number',
-							'label'		=> 	'Cache Timeout',
+							'label'		=> 	'SQLite Timeout',
 							'default'	=>	(int)$wp_object_cache->timeout,
 							'after'		=> ' seconds',
 							'info'		=> 	'Set the SQLite database timeout.',
@@ -275,7 +367,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 
 					'_retries'			=> array(
 							'type'		=> 	'number',
-							'label'		=> 	'Cache Retries',
+							'label'		=> 	'SQLite Retries',
 							'default'	=>	(int)$wp_object_cache->max_retries,
 							'after'		=> ' attempts',
 							'info'		=> 	'Set the number of retries to attempt on critical actions.',
@@ -304,11 +396,6 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 											"Records are always written at the end of the script process (page load).",
 							'validate'	=>	[$this,'validate_config_option'],
 					),
-				]
-			);
-
-			$this->registerExtensionOptions( self::TAB_NAME,
-				[
 
 					'_default_expire'	=> array(
 							'type'		=> 	'select',
@@ -333,11 +420,11 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					),
 
 					'_prefetch_misses'	=> array(
-							'type'		=> 	'radio',
+							'type'		=> 	'switch',
 							'label'		=> 	'Pre-fetch Misses',
-							'options'	=>	['Enabled'=>1,'Disabled'=>0],
+							'options'	=>	['Enabled'=>1],
 							'default'	=>	(int)$wp_object_cache->prefetch_misses,
-							'info'		=> 	'Pre-fetching cache misses prevents repeated, unnecessary reads of the L2 cache.',
+							'info'		=> 	'Pre-fetching cache misses prevents repeated, unnecessary reads of the L2 cache (disabled with APCu).',
 							'validate'	=>	[$this,'validate_config_option'],
 					),
 
@@ -361,27 +448,31 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 							'validate'	=>	[$this,'validate_config_option'],
 					),
 
-					'_nonp_groups' 		=> array(
-							'type'		=>	'textarea',
-							'label'		=>	"Non-Persistent Groups ",
-							'default'	=>	 (defined('EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS') && is_array(EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS))
-												? implode(', ',EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS) : '',
-							'info'		=>	"Cache groups that should not be stored in the L2 cache table.",
-							'help'		=>	"[info] Non-persistent groups are object groups that do not persist across page loads. ".
-											"This may be another method to alleviate issues caused by cache persistence ".
-											"or improve performance by limiting cache data.",
-							'validate'	=>	[$this,'validate_config_option'],
-							'height'	=>	'2',
-					),
-
 					'_prefetch_groups' 	=> array(
 							'type'		=>	'textarea',
 							'label'		=>	"Pre-fetch Groups ",
 							'default'	=>	 (defined('EAC_OBJECT_CACHE_PREFETCH_GROUPS') && is_array(EAC_OBJECT_CACHE_PREFETCH_GROUPS))
 												? implode(', ',EAC_OBJECT_CACHE_PREFETCH_GROUPS) : '',
-							'info'		=>	"Pre-fetch specific object groups from L2 cache at startup.",
+							'info'		=>	"Pre-fetch specific object groups from L2 cache at startup (disabled with APCu).",
 							'help'		=>	"[info] Pre-fretching a group of records may be much faster than loading each key individually, ".
 											"but may load keys that are not neaded, using memory unnecessarily.",
+							'validate'	=>	[$this,'validate_config_option'],
+							'height'	=>	'2',
+					),
+				]);
+			}
+
+			$this->registerExtensionOptions( self::TAB_NAME,
+				[
+					'_nonp_groups' 		=> array(
+							'type'		=>	'textarea',
+							'label'		=>	"Non-Persistent Groups ",
+							'default'	=>	 (defined('EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS') && is_array(EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS))
+												? implode(', ',EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS) : '',
+							'info'		=>	"Cache groups that should not be stored in the persistent cache.",
+							'help'		=>	"[info] Non-persistent groups are object groups that do not persist across page loads. ".
+											"This may be another method to alleviate issues caused by cache persistence ".
+											"or improve performance by limiting cache data.",
 							'validate'	=>	[$this,'validate_config_option'],
 							'height'	=>	'2',
 					),
@@ -407,40 +498,104 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 			global $wp_object_cache;
 			switch ($fieldName)
 			{
+				case '_btnCacheFlush':
+					wp_cache_flush_blog();
+					break;
+				case '_sqlite_version':
+					if (is_multisite() && !$this->plugin->is_network_admin()) return $value;
+					$value == ($value == 'Enabled');
+					$current = defined('EAC_OBJECT_CACHE_USE_DB') ? EAC_OBJECT_CACHE_USE_DB : true;
+					if ($value == $current) return $value; 	// no change
+					if ($value) {	// enabled is default
+						$this->wpConfig->remove( 'constant', 'EAC_OBJECT_CACHE_USE_DB' );
+					} else {
+						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_USE_DB', "FALSE", ['raw'=>true] );
+					}
+					break;
+				case '_apcu_version':
+					if (is_multisite() && !$this->plugin->is_network_admin()) return $value;
+					$value == ($value == 'Enabled');
+					$current = defined('EAC_OBJECT_CACHE_USE_APCU') ? EAC_OBJECT_CACHE_USE_APCU : true;
+					if ($value == $current) return $value; 	// no change
+					if ($value) {	// enabled is default
+						$this->wpConfig->remove( 'constant', 'EAC_OBJECT_CACHE_USE_APCU' );
+					} else {
+						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_USE_APCU', "FALSE", ['raw'=>true] );
+					}
+					break;
+				case '_opt_memory':
+					if (is_multisite() && !$this->plugin->is_network_admin()) return $value;
+					$value == ($value == 'Enabled');
+					$current = defined('EAC_OBJECT_CACHE_OPTIMIZE_MEMORY') ? EAC_OBJECT_CACHE_OPTIMIZE_MEMORY : false;
+					if ($value == $current) return $value; 	// no change
+					if (!$value) {	// disabled is default
+						$this->wpConfig->remove( 'constant', 'EAC_OBJECT_CACHE_OPTIMIZE_MEMORY' );
+					} else {
+						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_OPTIMIZE_MEMORY', "TRUE", ['raw'=>true] );
+					}
+					break;
 				case '_mmap_size':
 					if ($value == $wp_object_cache->mmap_size) return $value; 	// no change
-					$value = (is_numeric($value)) ? (int)$value : 3;
-					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_MMAP_SIZE', "{$value}", ['raw'=>true] );
+					$value = (is_numeric($value)) ? (int)$value : 0;
+					if ($value === 0) {
+						$this->wpConfig->remove( 'constant', 'EAC_OBJECT_CACHE_MMAP_SIZE' );
+					} else {
+						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_MMAP_SIZE', "{$value}", ['raw'=>true] );
+					}
 					break;
 				case '_timeout':
 					if ($value == $wp_object_cache->timeout) return $value; 	// no change
 					$value = (is_numeric($value)) ? (int)$value : 3;
-					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_TIMEOUT', "{$value}", ['raw'=>true] );
+					if ($value === 3) {
+						$this->wpConfig->remove( 'constant', 'EAC_OBJECT_CACHE_TIMEOUT' );
+					} else {
+						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_TIMEOUT', "{$value}", ['raw'=>true] );
+					}
 					break;
 				case '_retries':
 					if ($value == $wp_object_cache->max_retries) return $value; 	// no change
 					$value = (is_numeric($value)) ? (int)$value : 3;
-					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_MAX_RETRIES', "{$value}", ['raw'=>true] );
+					if ($value === 3) {
+						$this->wpConfig->remove( 'constant', 'EAC_OBJECT_CACHE_MAX_RETRIES' );
+					} else {
+						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_MAX_RETRIES', "{$value}", ['raw'=>true] );
+					}
 					break;
 				case 'object_cache_delayed_writes':
 					if ($value == (int)$wp_object_cache->delayed_writes) return $value; 	// no change
 					$value = ($value == 0) ? 'FALSE' : ( ($value == 1) ? 'TRUE' : (int)$value );
-					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_DELAYED_WRITES', "{$value}", ['raw'=>true] );
+					if ($value === 32) {
+						$this->wpConfig->remove( 'constant', 'EAC_OBJECT_CACHE_DELAYED_WRITES' );
+					} else {
+						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_DELAYED_WRITES', "{$value}", ['raw'=>true] );
+					}
 					break;
 				case '_default_expire':
 					if ($value == $wp_object_cache->default_expire) return $value; 	// no change
 					$value = (is_numeric($value)) ? (int)$value : -1;
-					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_DEFAULT_EXPIRE', "{$value}", ['raw'=>true] );
+					if ($value === 0) {
+						$this->wpConfig->remove( 'constant', 'EAC_OBJECT_CACHE_DEFAULT_EXPIRE' );
+					} else {
+						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_DEFAULT_EXPIRE', "{$value}", ['raw'=>true] );
+					}
 					break;
 				case '_prefetch_misses':
 					if ($value == (int)$wp_object_cache->prefetch_misses) return $value; 	// no change
-					$value = ($value == 0) ? 'FALSE' : 'TRUE';
-					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_PREFETCH_MISSES', "{$value}", ['raw'=>true] );
+					$value = ($value == 1) ? 'TRUE' : 'FALSE';
+					if ($value === true) {
+						$this->wpConfig->remove( 'constant', 'EAC_OBJECT_CACHE_PREFETCH_MISSES' );
+					} else {
+						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_PREFETCH_MISSES', "{$value}", ['raw'=>true] );
+					}
 					break;
 				case '_probability':
 					if ($value == $wp_object_cache->probability) return $value; 	// no change
-					$value = (is_numeric($value)) ? (int)$value : 100;
-					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_PROBABILITY', "{$value}", ['raw'=>true] );
+					$value = (is_numeric($value)) ? (int)$value : 1000;
+					if ($value === 1000) {
+						$this->wpConfig->remove( 'constant', 'EAC_OBJECT_CACHE_PROBABILITY' );
+					} else {
+						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_PROBABILITY', "{$value}", ['raw'=>true] );
+					}
 					break;
 				case '_nonp_groups':
 					$current = defined('EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS') ? EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS : [];
@@ -472,14 +627,23 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 
 			ob_start();
 			?>
-			The {eac}Doojigger Object Cache is a light-weight and highly efficient drop-in persistent object cache
-			that uses a SQLite database to cache WordPress objects.
+			The {eac}Doojigger Object Cache is a light-weight and very efficient drop-in persistent object cache that
+			uses a fast SQLite database and even faster APCu shared memory to cache WordPress objects.
 
 			See: <a href='https://developer.wordpress.org/reference/classes/wp_object_cache/' target='_blank'>The WordPress Object Cache</a>
 
 			<details><summary>Configuration Options</summary>
-			{eac}ObjectCache configuration options may be set by adding defines in the wp-config.php file.
+			{eac}ObjectCache configuration options may be set by defining constants in the wp-config.php file.
 			<ul>
+			<li>To disable use of the SQLite Database  (default: true):<br>
+				<code>define( 'EAC_OBJECT_CACHE_USE_DB', false );</code>
+
+			<li>To disable use of the APCu memory cache  (default: true if APCu is installed):<br>
+				<code>define( 'EAC_OBJECT_CACHE_USE_APCU', false );</code>
+
+			<li>To optimize memory use when using APCu (default: false):<br>
+				<code>define( 'EAC_OBJECT_CACHE_OPTIMIZE_MEMORY', true );</code>
+
 			<li>To set the location of the SQLite database (default: '../wp-content/cache'):<br>
 				<code>define( 'EAC_OBJECT_CACHE_DIR', '/full/path/to/folder' );</code>
 
@@ -514,19 +678,25 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 				<code>define( 'EAC_OBJECT_CACHE_DEFAULT_EXPIRE', -1|0|int );</code>
 				<br><small>-1 = don't cache to persistent database, 0 = never expire, int = number of seconds until expired.</small>
 
+			<li>To set the default expiration time (in seconds) by group name<br>
+				<code>define( 'EAC_OBJECT_CACHE_GROUP_EXPIRE', array( 'group' => -1|0|int, ... ) );</code>
+
 			<li>To enable/disable pre-fetching of cache misses (default: true)<br>
 				<code>define('EAC_OBJECT_CACHE_PREFETCH_MISSES', true | false);</code>
 
-			<li>To set maintenance/sampling probability (default: 100)<br>
+			<li>To set maintenance/sampling probability (default: 1000)<br>
 				<code>define( 'EAC_OBJECT_CACHE_PROBABILITY', int );</code>
 
 			<li>To set groups as global (not site-specific in multisite)<br>
 				<code>define( 'EAC_OBJECT_CACHE_GLOBAL_GROUPS', [ 'groupA', 'groupB', ... ] );</code>
 				<br><small>WordPress automatically loads a list of global groups.</small>
 
-			<li>To set groups as non-persistant (not stored in the SQLite table)<br>
+			<li>To set groups as non-persistant (not stored in the persisten cache)<br>
 				<code>define( 'EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS', [ 'groupA', 'groupB', ... ] );</code>
 				<br><small>WordPress automatically loads a list of non-persistent groups.</small>
+
+			<li>To set groups that are allowed permanence (no expiration) in the persistent cache<br>
+				<code>define( 'EAC_OBJECT_CACHE_PERMANENT_GROUPS', [ 'groupA', 'groupB', ... ] );</code>
 
 			<li>To pre-fetch group(s) into memory at startup<br>
 				<code>define( 'EAC_OBJECT_CACHE_PREFETCH_GROUPS', [ 'groupA', 'groupB', ... ] );</code>
@@ -553,7 +723,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 		public function checkForInstall($check='all')
 		{
 			// check SQLite version
-			if ($check == 'all' || $check == 'version')
+			if ($check == 'sqlite')
 			{
 				$version = (class_exists('\SQLite3')) ? \SQLite3::version()['versionString'] : '';
 				if ( version_compare( $version, '3.24.0' ) < 0 )
@@ -561,15 +731,10 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					return [
 						'type'		=>	'version',
 						'data'		=>	$version,
-						'message'	=> 	'{eac}ObjectCache requires SQLite v3.24.0 or greater. '.
-											($version ? "Version {$version} is currently installed." : '').'.'
+						'message'	=> 	'SQLite v3.24.0 or greater is required. '.
+											($version ? "Version {$version} is currently installed." : '')
 					];
 				}
-			}
-
-			// check PDO extensions
-			if ($check == 'all' || $check == 'pdo')
-			{
 				if ( ! extension_loaded( 'pdo' ) )
 				{
 					return [
@@ -582,6 +747,33 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					return [
 						'type'		=>	'pdo_sqlite',
 						'message'	=>	'The PHP PDO Driver for SQLite is missing.'
+					];
+				}
+			}
+
+			// check APCu extensions
+			if ($check == 'apcu')
+			{
+				if (! (function_exists('\apcu_enabled') && \apcu_enabled()))
+				{
+					return [
+						'type'		=>	'apcu',
+						'message'	=>	'The APCu PHP Extension is not loaded. '
+					];
+				}
+			}
+
+			if ($check == 'all' || $check == 'cache')
+			{
+				$usingDB   = (defined('EAC_OBJECT_CACHE_USE_DB')) ? EAC_OBJECT_CACHE_USE_DB : true;
+				$usingAPCu = (defined('EAC_OBJECT_CACHE_USE_APCU')) ? EAC_OBJECT_CACHE_USE_APCU : true;
+				if (
+					(!$usingDB   || $this->checkForInstall('sqlite') !== true)  &&
+					(!$usingAPCu || $this->checkForInstall('apcu') !== true )
+				) {
+					return [
+						'type'		=>	'cache',
+						'message'	=>	'Caching extensions (SQLite and/or APCu) are unavailable.'
 					];
 				}
 			}

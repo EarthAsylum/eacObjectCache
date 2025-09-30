@@ -1,7 +1,7 @@
 <?php
 /**
  * Object Cache API.
- * {eac}Doojigger Object Cache - SQLite powered WP_Object_Cache Drop-in.
+ * {eac}Doojigger Object Cache - SQLite and APCu powered WP_Object_Cache Drop-in
  *
  * @package WordPress
  * @subpackage Cache
@@ -11,7 +11,7 @@
  * @author Kevin Burkholder <KBurkholder@EarthAsylum.com>
  * @link https://eacdoojigger.earthasylum.com/eacobjectcache/
  *
- * @version 25.0712.1
+ * @version 25.0916.1
  *
  */
 
@@ -30,7 +30,6 @@ function wp_cache_init() {
 
 	if (!isset($wp_object_cache) || !($wp_object_cache instanceof \WP_Object_Cache)) {
 		$wp_object_cache = new \WP_Object_Cache();
-		// because we may pull transients, which uses wp-cache, we must be instantiated
 		$wp_object_cache->init();
 	}
 }
@@ -416,8 +415,10 @@ function wp_cache_supports( $feature ) {
 		case 'permanent_groups':
 		case 'group_expire':
 			return true;
-
 		default:
+			if (isset($wp_object_cache) && ($wp_object_cache instanceof \WP_Object_Cache)) {
+				return method_exists($wp_object_cache, $feature);
+			}
 			return false;
 	}
 }
