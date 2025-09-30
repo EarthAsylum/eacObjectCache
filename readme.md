@@ -1,4 +1,4 @@
-## {eac}ObjectCache - a persistent object cache using a SQLite & APCu to cache WordPress objects.
+## {eac}ObjectCache - a persistent object cache using SQLite & APCu to cache WordPress objects.
 [![EarthAsylum Consulting](https://img.shields.io/badge/EarthAsylum-Consulting-0?&labelColor=6e9882&color=707070)](https://earthasylum.com/)
 [![WordPress](https://img.shields.io/badge/WordPress-Plugins-grey?logo=wordpress&labelColor=blue)](https://wordpress.org/plugins/search/EarthAsylum/)
 [![eacDoojigger](https://img.shields.io/badge/Requires-%7Beac%7DDoojigger-da821d)](https://eacDoojigger.earthasylum.com/)

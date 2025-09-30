@@ -1,4 +1,4 @@
-=== {eac}ObjectCache - a persistent object cache using a SQLite & APCu to cache WordPress objects. ===
+=== {eac}ObjectCache - a persistent object cache using SQLite & APCu to cache WordPress objects. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
 Stable tag:         2.0.0
