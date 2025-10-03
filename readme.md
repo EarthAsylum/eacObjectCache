@@ -147,7 +147,9 @@ _When using SQLite, `delayed writes` (see below) dramatically improves efficienc
 #### Inside The Numbers
 
 <img alt="Cache Counts" width="325" src="https://ps.w.org/eacobjectcache/assets/wpoc_example.png" />
+
 - - -
+
 | Label             | Value               |
 | :--------------   | :---------------    |
 | cache hits        | The total number of requests that returned a cached value. |
