@@ -139,10 +139,8 @@ _When using SQLite, `delayed writes` (see below) dramatically improves efficienc
 
 <img alt="Cache Counts" width="325" src="https://ps.w.org/eacobjectcache/assets/wpoc_example.png" />
 
-- - -
-
 | Label             | Value               |
-| :--------------   | :---------------    |
+| :---------------- | :------------------ |
 | cache hits        | The total number of requests that returned a cached value. |
 | cache misses      | The total number of requests that did not return a cached value. This number includes *L1 cache (-)*, *L2 non-persistent*, *L2 APCu (-)*, and *L2 SQL misses*. |
 | L1 cache hits     | The number of requests that were found in the L1 memory cache. |
