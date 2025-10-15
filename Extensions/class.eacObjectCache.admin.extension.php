@@ -4,7 +4,7 @@ namespace EarthAsylumConsulting\Extensions;
 if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 {
 	/**
-	 * Extension: eacObjectCache - SQLite powered WP_Object_Cache Drop-in.
+	 * Extension: eacObjectCache - SQLite and APCu powered WP_Object_Cache Drop-in.
 	 *
 	 * @category	WordPress Plugin
 	 * @package		{eac}Doojigger Utilities\{eac}Doojigger Object Cache
@@ -18,7 +18,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '25.0930.1';
+		const VERSION	= '25.1014.1';
 
 		/**
 		 * @var string to set default tab name
@@ -65,6 +65,27 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 				$this->add_action( "options_settings_page", array($this, 'admin_options_settings') );
 				// Add contextual help
 				$this->add_action( 'options_settings_help', array($this, 'admin_options_help') );
+			}
+		}
+
+
+		/**
+		 * initialize method - called from main plugin
+		 *
+		 * @return 	void
+		 */
+		public function initialize()
+		{
+			if ( ! parent::initialize() ) return; // disabled
+
+			if (defined('EAC_OBJECT_CACHE_VERSION'))
+			{
+				global $wp_object_cache;
+
+				$wp_object_cache->log_stats 		= $wp_object_cache->log_stats || (
+					(defined('QM_VERSION') && (!defined('QM_DISABLED') || !QM_DISABLED )) ||
+					(defined('EACDOOJIGGER_VERSION')) // if we're here, this is true
+				);
 			}
 		}
 
@@ -448,15 +469,14 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 							'validate'	=>	[$this,'validate_config_option'],
 					),
 
-					'_prefetch_groups' 	=> array(
+					'object_cache_prefetch_groups' 	=> array(
 							'type'		=>	'textarea',
 							'label'		=>	"Pre-fetch Groups ",
-							'default'	=>	 (defined('EAC_OBJECT_CACHE_PREFETCH_GROUPS') && is_array(EAC_OBJECT_CACHE_PREFETCH_GROUPS))
-												? implode(', ',EAC_OBJECT_CACHE_PREFETCH_GROUPS) : '',
+					//		'default'	=>	 (defined('EAC_OBJECT_CACHE_PREFETCH_GROUPS') && is_array(EAC_OBJECT_CACHE_PREFETCH_GROUPS))
+					//							? implode(', ',EAC_OBJECT_CACHE_PREFETCH_GROUPS) : '',
 							'info'		=>	"Pre-fetch specific object groups from L2 cache at startup (disabled with APCu).",
 							'help'		=>	"[info] Pre-fretching a group of records may be much faster than loading each key individually, ".
 											"but may load keys that are not neaded, using memory unnecessarily.",
-							'validate'	=>	[$this,'validate_config_option'],
 							'height'	=>	'2',
 					),
 				]);
@@ -464,16 +484,15 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 
 			$this->registerExtensionOptions( self::TAB_NAME,
 				[
-					'_nonp_groups' 		=> array(
+					'object_cache_nonp_groups' 		=> array(
 							'type'		=>	'textarea',
 							'label'		=>	"Non-Persistent Groups ",
-							'default'	=>	 (defined('EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS') && is_array(EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS))
-												? implode(', ',EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS) : '',
+					//		'default'	=>	 (defined('EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS') && is_array(EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS))
+					//							? implode(', ',EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS) : '',
 							'info'		=>	"Cache groups that should not be stored in the persistent cache.",
 							'help'		=>	"[info] Non-persistent groups are object groups that do not persist across page loads. ".
 											"This may be another method to alleviate issues caused by cache persistence ".
 											"or improve performance by limiting cache data.",
-							'validate'	=>	[$this,'validate_config_option'],
 							'height'	=>	'2',
 					),
 				]
@@ -491,7 +510,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 		/**
 		 * validate/set config options
 		 *
-		 * @return	void
+		 * @return	mixed
 		 */
  		public function validate_config_option($value, $fieldName, $metaData, $priorValue)
 		{
@@ -597,6 +616,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 						$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_PROBABILITY', "{$value}", ['raw'=>true] );
 					}
 					break;
+/*
 				case '_nonp_groups':
 					$current = defined('EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS') ? EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS : [];
 					$value = array_filter(array_map('trim', explode("\n", str_replace([',',' '],"\n",$value))));
@@ -611,6 +631,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 					$value = (!empty($value)) ? "[ '".implode("', '",$value)."' ]" : '[]';
 					$this->wpConfig->update( 'constant', 'EAC_OBJECT_CACHE_PREFETCH_GROUPS', "{$value}", ['raw'=>true] );
 					break;
+*/
 			}
 			return $value;
 		}
@@ -643,6 +664,9 @@ if (! class_exists(__NAMESPACE__.'\object_cache_admin', false) )
 
 			<li>To optimize memory use when using APCu (default: false):<br>
 				<code>define( 'EAC_OBJECT_CACHE_OPTIMIZE_MEMORY', true );</code>
+
+			<li>To disable use of the `alloptions` array in WordPress (default: false):<br>
+				<code>define( 'EAC_OBJECT_CACHE_DISABLE_ALLOPTIONS', true );</code>
 
 			<li>To set the location of the SQLite database (default: '../wp-content/cache'):<br>
 				<code>define( 'EAC_OBJECT_CACHE_DIR', '/full/path/to/folder' );</code>

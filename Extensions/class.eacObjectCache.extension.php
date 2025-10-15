@@ -4,7 +4,7 @@ namespace EarthAsylumConsulting\Extensions;
 if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 {
 	/**
-	 * Extension: eacObjectCache - SQLite powered WP_Object_Cache Drop-in.
+	 * Extension: eacObjectCache - SQLite and APCu powered WP_Object_Cache Drop-in.
 	 *
 	 * @category	WordPress Plugin
 	 * @package		{eac}Doojigger Utilities\{eac}Doojigger Object Cache
@@ -18,7 +18,7 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		/**
 		 * @var string extension version
 		 */
-		const VERSION	= '25.0926.1';
+		const VERSION	= '25.1014.1';
 
 		/**
 		 * @var string to set default tab name
@@ -56,18 +56,30 @@ if (! class_exists(__NAMESPACE__.'\object_cache_extension', false) )
 		{
 			if ( ! parent::initialize() ) return; // disabled
 
-			global $wp_object_cache;
+			if (defined('EAC_OBJECT_CACHE_VERSION'))
+			{
+				global $wp_object_cache;
 
-			$wp_object_cache->display_stats 	= (int)$this->get_option('object_cache_stats',$wp_object_cache->display_stats);
-			$wp_object_cache->log_stats 		= (
-				(defined('QM_VERSION') && (!defined('QM_DISABLED') || !QM_DISABLED )) ||
-				(defined('EACDOOJIGGER_VERSION')) // if we're here, this is true
-			);
+				$wp_object_cache->display_stats 	= (int)$this->get_option('object_cache_stats',$wp_object_cache->display_stats);
+				$wp_object_cache->log_stats 		= $wp_object_cache->log_stats || (
+					(defined('QM_VERSION') && (!defined('QM_DISABLED') || !QM_DISABLED ))
+				);
 
-		//	$wp_object_cache->display_errors 	= $this->is_admin();
-			$wp_object_cache->log_errors 		= $wp_object_cache->log_stats;
+			//	$wp_object_cache->display_errors 	= $this->is_admin();
+				$wp_object_cache->log_errors 		= $wp_object_cache->log_stats;
 
-			$wp_object_cache->delayed_writes 	= (int)$this->get_option('object_cache_delayed_writes',$wp_object_cache->delayed_writes);
+				$wp_object_cache->delayed_writes 	= (int)$this->get_option('object_cache_delayed_writes',$wp_object_cache->delayed_writes);
+
+				if ($groups = $this->get_option('object_cache_prefetch_groups')) {
+					$groups = array_filter($this->plugin->explode_with_keys("\n",str_replace([',',' '],"\n",$groups)));
+					$wp_object_cache->add_prefetch_groups($groups);
+				}
+
+				if ($groups = $this->get_option('object_cache_nonp_groups')) {
+					$groups = array_filter($this->plugin->explode_with_keys("\n",str_replace([',',' '],"\n",$groups)));
+					$wp_object_cache->add_non_persistent_groups($groups);
+				}
+			}
 		}
 
 

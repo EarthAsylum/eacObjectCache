@@ -4,7 +4,7 @@
  *
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite and APCu powered WP_Object_Cache Drop-in
- * Version:				2.0.0
+ * Version:				2.1.0
  * Requires at least:	5.8
  * Tested up to:		6.8
  * Requires PHP:		7.4
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE_VERSION','2.0.0');
+define('EAC_OBJECT_CACHE_VERSION','2.1.0');
 
 /**
  * Derived from WordPress core WP_Object_Cache (wp-includes/class-wp-object-cache.php)
@@ -61,7 +61,6 @@ class WP_Object_Cache
 	 */
 	private const GROUP_ID				= '@object-cache';
 	private const GROUP_ID_GLOBAL		= '@object-cache-global';
-	private const GROUP_ID_NP			= '@object-cache-np';
 
 	/**
 	 * Path name to cache folder.
@@ -259,9 +258,7 @@ class WP_Object_Cache
 	 *
 	 * @var [string => bool]
 	 */
-	private array $nonp_groups			= array(
-		self::GROUP_ID_NP			=> true,
-	);
+	private array $nonp_groups			= array();
 
 	/**
 	 * List of permanent cache groups, no expiration required (or any group with ':permanent' suffix).
@@ -286,12 +283,15 @@ class WP_Object_Cache
 	 *
 	 * Set with: EAC_OBJECT_CACHE_PREFETCH_GROUPS, wp_cache_add_prefetch_groups( [...] )
 	 *
-	 * @var [string => bool]
+	 * @var [string => bool|string|array]
 	 */
 	private array $prefetch_groups 		= array(
 		self::GROUP_ID				=> true,
 		self::GROUP_ID_GLOBAL		=> true,
-	);
+		'%:prefetch'				=> true,
+  		'options' 					=> ['%alloptions','%notoptions'],
+  		'site-options' 				=> ['%alloptions','%notoptions'],
+  	);
 
 	/**
 	 * If expiration is not set, use this time integer for the group.
@@ -304,12 +304,12 @@ class WP_Object_Cache
 	 */
 	public array $group_expire			= array(
 	// these query groups have no expiration
-	//	'comment-queries'			=> WEEK_IN_SECONDS,
-	//	'site-queries'				=> WEEK_IN_SECONDS,
-	//	'network-queries'			=> WEEK_IN_SECONDS,
-	//	'post-queries'				=> WEEK_IN_SECONDS,
-	//	'term-queries'				=> WEEK_IN_SECONDS,
-	//	'user-queries'				=> WEEK_IN_SECONDS,
+	//	'comment-queries'			=> DAY_IN_SECONDS,
+	//	'site-queries'				=> DAY_IN_SECONDS,
+	//	'network-queries'			=> DAY_IN_SECONDS,
+	//	'post-queries'				=> DAY_IN_SECONDS,
+	//	'term-queries'				=> DAY_IN_SECONDS,
+	//	'user-queries'				=> DAY_IN_SECONDS,
 	);
 
 	/**
@@ -351,6 +351,17 @@ class WP_Object_Cache
 	 * @var bool
 	 */
 	public bool $optimize_memory		= false;
+
+	/**
+	 * Disable use of 'alloptions' array.
+	 * 70% + of cache hits are for 'alloptions'.
+	 * Maybe better to just get the single option(s) from the cache.
+	 *
+	 * Set with: EAC_OBJECT_CACHE_DISABLE_ALLOPTIONS
+	 *
+	 * @var bool
+	 */
+	private bool $disable_alloptions	= false;
 
 	/**
 	 * Memory/persistent cache stats.
@@ -447,7 +458,7 @@ class WP_Object_Cache
 
 
 	/**
-	 * Constructor, sets up object properties, SQLite database.
+	 * Constructor, sets up object properties, APCu, SQLite database.
 	 * Called from wp_cache_init();
 	 *
 	 */
@@ -476,7 +487,8 @@ class WP_Object_Cache
 	 */
 	public function init()
 	{
-		if (! $this->is_multisite) {
+		if (! $this->is_multisite)
+		{
 			$this->switch_to_blog( get_current_blog_id() );
 		}
 
@@ -484,15 +496,16 @@ class WP_Object_Cache
 
 		if (is_admin())
 		{
+			add_action( (is_network_admin() ? 'wp_network_dashboard_setup' :'wp_dashboard_setup'),function()
+				{
+					wp_add_dashboard_widget( 'object_cache_widget', 'WP Object Cache', [$this,'showDashboardStats'] );
+				}
+			);
+
 			add_action( 'admin_footer', function()
 				{
-					// this gets moved to the top of an admin page
-					if ($this->display_stats) {
-						echo "\n<style>".esc_html($this->statsCSS)."</style>\n";
-						echo "<div class='object-cache-notice notice notice-info'>";
-						echo "<details><summary>Object Cache Stats...</summary>";
-						$this->htmlStats( true, ($this->display_stats) );
-						echo "</details></div>\n";
+					if ($this->display_stats && function_exists('is_admin_bar_showing') && is_admin_bar_showing()) {
+						$this->showAdminPageStats();
 					}
 				},PHP_INT_MAX - 100
 			);
@@ -502,7 +515,7 @@ class WP_Object_Cache
 			{
 				// for Query Monitor/eacDoojigger logging
 				if ($this->log_stats) {
-					$this->getStatsCache(true);
+					$this->logRuntimeStats();
 				}
 			},8 // before qm (9)
 		);
@@ -516,35 +529,50 @@ class WP_Object_Cache
 	private function get_defined_options(): void
 	{
 		foreach(array(
-		//	option suffix		validation
-			['cache_dir', 		'is_string'],	// cache directory (/wp-content/cache)
-			['cache_file', 		'is_string'],	// cache file name (.eac_object_cache.sqlite)
-			['journal_mode', 	'is_string'],	// SQLite journal mode	(WAL)
-			['mmap_size', 		'is_int'],		// SQLite mapped memory I/O
-			['page_size', 		'is_int'],		// SQLite page size
-			['cache_size', 		'is_int'],		// SQLite cache size
-			['timeout', 		'is_int'],		// PDO timeout (int)
-			['max_retries', 	'is_int'],		// database retries (int)
-			['delayed_writes',	 null],			// delayed writes (true|false|int)
-			['default_expire', 	'is_int'],		// default expiration (-1|0|int)
-			['prefetch_misses', 'is_bool'],		// pre-fetch cache misses (bool)
-			['probability', 	'is_int'],		// maintenance/sampling probability (int)
-			['write_hooks', 	'is_array'],	// hooks that trigger an immediate cache write
-			['optimize_memory', 'is_bool'],		// optimize memory
-			['use_apcu', 		'is_bool'],		// disable APCu
-			['use_db', 			'is_bool'],		// disable SQLite db
+		//	option suffix			validation
+			['cache_dir', 			'is_string'],	// cache directory (/wp-content/cache)
+			['cache_file', 			'is_string'],	// cache file name (.eac_object_cache.sqlite)
+			['journal_mode', 		'is_string'],	// SQLite journal mode	(WAL)
+			['mmap_size', 			'is_int'],		// SQLite mapped memory I/O
+			['page_size', 			'is_int'],		// SQLite page size
+			['cache_size', 			'is_int'],		// SQLite cache size
+			['timeout', 			'is_int'],		// PDO timeout (int)
+			['max_retries', 		'is_int'],		// database retries (int)
+			['delayed_writes',		null],			// delayed writes (true|false|int)
+			['default_expire', 		'is_int'],		// default expiration (-1|0|int)
+			['prefetch_misses', 	'is_bool'],		// pre-fetch cache misses (bool)
+			['probability', 		'is_int'],		// maintenance/sampling probability (int)
+			['write_hooks', 		'is_array'],	// hooks that trigger an immediate cache write
+			['optimize_memory', 	'is_bool'],		// optimize memory
+			['disable_alloptions', 	'is_bool'],		// disable use of 'alloptions' array
+			['use_apcu', 			'is_bool'],		// disable APCu
+			['use_db', 				'is_bool'],		// disable SQLite db
 		) as $option) {
 			$this->get_defined_option(...$option);
 		}
 
+		$this->cache_dir = trailingslashit($this->cache_dir);
+
 		// actions or filters that trigger an immediate cache write.
-		foreach ($this->write_hooks as $hook)
+		if (!$this->use_apcu) 	// unnecessary when using APCu
 		{
-			add_filter( $hook, function($return)
-			{
+			$noDelay = function($return=null) {
 				$this->set_delayed_writes( false );
 				return $return;
-			});
+			};
+			foreach ($this->write_hooks as $hook) {
+				add_filter( $hook, fn()=>$noDelay() );
+			}
+		}
+
+		if ($this->disable_alloptions)
+		{
+			// a non-empty array circumvents alloptions - no option is ever found here.
+			// @since WP 6.2.0
+			add_filter( 'pre_wp_load_alloptions', 			fn()=>[__CLASS__ => true] );
+			// empty array means that nothing is ever autoloaded.
+			// @since WP 6.6.0
+			add_filter( 'wp_autoload_values_to_autoload', 	fn()=>[] );
 		}
 	}
 
@@ -559,7 +587,7 @@ class WP_Object_Cache
 	private function get_defined_option(string $var, $is_valid = null)
 	{
 		$value = null;
-		$constant = sprintf( 'EAC_OBJECT_CACHE_%s', strtoupper( $var ) );
+		$constant = 'EAC_OBJECT_CACHE_' . strtoupper( $var );
 		if (defined( $constant )) {
 			$constant = constant($constant);
 			$value = (is_callable($is_valid))
@@ -585,11 +613,16 @@ class WP_Object_Cache
 		$this->use_apcu = ($this->use_apcu && function_exists('apcu_enabled') && apcu_enabled());
 		if ( ! $this->use_apcu ) return false;
 
-		$cacheName	= trailingslashit($this->cache_dir);
-
 		$apcu_cache_ids  = apcu_fetch('WPOC_CACHE_IDS') ?: [];
 
-		$apcu_key = array_search($cacheName, $apcu_cache_ids);
+		foreach([
+			$this->cache_dir, // prior version used only directory
+			$this->cache_dir . $this->cache_file
+		] as $cacheName) {
+			$apcu_key = array_search($cacheName, $apcu_cache_ids);
+			if ($apcu_key !== false) break;
+		}
+
 		if ($apcu_key === false) {
 			$apcu_cache_ids[] = $cacheName;
 			$apcu_key = key($apcu_cache_ids);
@@ -609,7 +642,7 @@ class WP_Object_Cache
 		$this->use_db = ($this->use_db && extension_loaded('pdo_sqlite'));
 		if ( ! $this->use_db ) return false;
 
-		$cacheName	= trailingslashit($this->cache_dir) . $this->cache_file;
+		$cacheName	= $this->cache_dir . $this->cache_file;
 		$install	= !file_exists($cacheName);
 
 		$retries = 0;
@@ -1013,6 +1046,8 @@ class WP_Object_Cache
 	 */
 	private function key_exists( string $blogkey, string $group, bool $count = false ): bool
 	{
+		global $_wp_using_ext_object_cache;
+
 		// Does the key exist in the L1 cache?
 		$found = $this->key_exists_memory( $blogkey, $group, $count );
 		if (is_bool($found)) return $found;
@@ -1026,7 +1061,8 @@ class WP_Object_Cache
 			return false;
 		}
 
-		if (! wp_using_ext_object_cache()) {
+		// external cache disabled, consider this non-persistent
+		if (! $_wp_using_ext_object_cache) {
 			$this->addRuntimeStats('L2 non-persistent',(int)$count);
 			return false;
 		}
@@ -1057,6 +1093,7 @@ class WP_Object_Cache
 			} else {
 				$this->current = $this->L1_cache[ $group ][ $blogkey ];
 			}
+			//if ($group=='options') $group .= ':M:'.$blogkey;
 			$this->addRuntimeStats('cache hits',(int)$count,$group);
 			$this->addRuntimeStats('L1 cache hits',(int)$count);
 
@@ -1094,6 +1131,7 @@ class WP_Object_Cache
 			} else {
 				unset($this->L1_cache[ $group ][ $blogkey ]);
 			}
+			//if ($group=='options') $group .= ':A:'.$blogkey;
 			$this->addRuntimeStats('cache hits',(int)$count,$group);
 			$this->addRuntimeStats('L2 APCu hits',(int)$count);
 
@@ -1353,16 +1391,12 @@ class WP_Object_Cache
 	public function get( $key, $group = 'default', $force = false, &$found = null )
 	{
 		if ($force && $this->usingL2cache($group)) {
-		// $force is intended to read from L2 cache,
-		// 	assuming L2 is the most recent, maybe updated by another process.
-		// However, with delayed writes, we don't know that, Our L1 may be most recent.
-		// Using APCu does work as it is shared and updated immediately.
+		// $force read from L2 cache, assuming L2 is the most recent, maybe updated by another process.
 		// Used by 'alloptions' when adding/removing a single option and _get_cron_lock() in wp-cron process.
-			if (($blogkey = $this->get_blog_key( $key, $group ))
-			&&  ($this->key_exists_apcu( $blogkey, $group, true ))) {
-				$this->addRuntimeStats('L1 cache misses',1); // count as L1 miss
-				$found = true;
-				return $this->current[ 'value' ];
+			if ($blogkey = $this->get_blog_key( $key, $group )) {
+				if (isset( $this->L1_cache[ $group ], $this->L1_cache[ $group ][ $blogkey ] )) {
+					unset($this->L1_cache[ $group ][ $blogkey ]);
+				}
 			}
 		}
 
@@ -1545,7 +1579,8 @@ class WP_Object_Cache
 		if ( ! $blogkey = $this->get_blog_key( $key, $group ) ) return false;
 		//if ( ! $this->key_exists( $blogkey, $group, false ) ) return false;
 
-		$this->L1_cache[ $group ][ $blogkey ] = false;	// not in persistent cache
+		// set, not in persistent cache
+		$this->L1_cache[ $group ][ $blogkey ] = false;
 
 		// when not to write to db
 		if ( !$this->usingL2cache($group) ) {
@@ -1735,7 +1770,6 @@ class WP_Object_Cache
 					$this->error_log(__CLASS__,"SQL cache flushed for group: {$group}, {$count} records deleted");
 					$this->addRuntimeStats('L2 SQL deletes',$count);
 					$this->addRuntimeStats('L2 SQL commits',1);
-				//	$this->addRuntimeStats("flushed {$group}",$count);
 				}
 				$this->use_db->commit();
 				break;
@@ -1801,7 +1835,6 @@ class WP_Object_Cache
 					$this->error_log(__CLASS__,"SQL cache flushed for site: {$blog_id}, {$count} records deleted");
 					$this->addRuntimeStats('L2 SQL deletes',$count);
 					$this->addRuntimeStats('L2 SQL commits',1);
-				//	$this->addRuntimeStats("flushed site {$blog_id}",$count);
 				}
 				$this->use_db->commit();
 				break;
@@ -1868,10 +1901,8 @@ class WP_Object_Cache
 	public function add_global_groups( $groups = [] ): array
 	{
 		// EAC_OBJECT_CACHE_GLOBAL_GROUPS
-		$defined_groups = $this->get_defined_groups('global');
-
-		$groups = array_fill_keys( (array) $groups, true );
-		$this->global_groups = array_merge( $this->global_groups, $defined_groups, $groups );
+		$defined_groups = $this->get_defined_groups('global',(array)$groups);
+		$this->global_groups = array_merge( $this->global_groups, $defined_groups );
 
 		return $this->global_groups;
 	}
@@ -1899,10 +1930,8 @@ class WP_Object_Cache
 	public function add_non_persistent_groups( $groups = [] ): array
 	{
 		// EAC_OBJECT_CACHE_NON_PERSISTENT_GROUPS
-		$defined_groups = $this->get_defined_groups('non_persistent');
-
-		$groups = array_fill_keys( (array) $groups, true );
-		$this->nonp_groups = array_merge( $this->nonp_groups, $defined_groups, $groups );
+		$defined_groups = $this->get_defined_groups('non_persistent',(array)$groups);
+		$this->nonp_groups = array_merge( $this->nonp_groups, $defined_groups );
 
 		return $this->nonp_groups;
 	}
@@ -1929,10 +1958,8 @@ class WP_Object_Cache
 	public function add_permanent_groups( $groups = [] ): array
 	{
 		// EAC_OBJECT_CACHE_PERMANENT_GROUPS
-		$defined_groups = $this->get_defined_groups('permanent');
-
-		$groups = array_fill_keys( $groups, true );
-		$this->perm_groups = array_merge( $this->perm_groups, $defined_groups, $groups );
+		$defined_groups = $this->get_defined_groups('permanent',(array)$groups);
+		$this->perm_groups = array_merge( $this->perm_groups, $defined_groups );
 
 		return $this->perm_groups;
 	}
@@ -1959,10 +1986,8 @@ class WP_Object_Cache
 	public function add_prefetch_groups( $groups = [] ): array
 	{
 		// EAC_OBJECT_CACHE_PREFETCH_GROUPS
-		$defined_groups = $this->get_defined_groups('prefetch');
-
-		$groups = array_fill_keys( (array) $groups, true );
-		$this->prefetch_groups = array_merge( $this->prefetch_groups, $defined_groups, $groups );
+		$defined_groups = $this->get_defined_groups('prefetch',(array)$groups);
+		$this->prefetch_groups = array_merge( $this->prefetch_groups, $defined_groups );
 
 		$this->set('prefetch_groups', $this->prefetch_groups, self::GROUP_ID, 0);
 		return $this->prefetch_groups;
@@ -1992,7 +2017,7 @@ class WP_Object_Cache
 		// EAC_OBJECT_CACHE_GROUP_EXPIRE
 		$defined_groups = $this->get_defined_option("group_expire", 'is_array') ?? [];
 
-		$this->group_expire = array_merge( $this->group_expire, $defined_groups, $groups );
+		$this->group_expire = array_merge( $this->group_expire, $defined_groups, (array)$groups );
 
 		return $this->group_expire;
 	}
@@ -2004,12 +2029,20 @@ class WP_Object_Cache
 	 * @param string $constant unique part of group constant name
 	 * @return array [group=>true,...]
 	 */
-	private function get_defined_groups( string $constant ): array
+	private function get_defined_groups( string $constant, array $addGroups = [] ): array
 	{
 		$groups = [];
 		if ($constant = $this->get_defined_option("{$constant}_groups", 'is_array')) {
-			if ( !empty( $constant ) ) {
-				$groups = array_fill_keys( $constant, true );
+		//	if ( !empty( $constant ) ) {
+		//		$groups = array_fill_keys( $constant, true );
+		//	}
+			$addGroups = array_merge($addGroups,$constant);
+		}
+		foreach ($addGroups as $key => $value) {
+			if (is_int($key)) {
+				$groups[$value] = true;
+			} else {
+				$groups[$key] = $value;
 			}
 		}
 		return $groups;
@@ -2023,23 +2056,38 @@ class WP_Object_Cache
 	 */
 	private function load_prefetch_groups(): void
 	{
-		if ( ! $this->use_db || $this->use_apcu ) return;
+		if ( $this->use_db && ! $this->use_apcu )
+		{
+			$blogkeys = [];
+			$this->prefetch_groups = $this->get_cache('prefetch_groups',self::GROUP_ID) ?: [];
+			foreach ($this->prefetch_groups as $group => $key) {
+				if (! $this->is_non_persistent_group($group) ) {
+					if (is_array($key)) {
+						foreach ($key as $k) {
+							$blogkeys[ $group ][] = $this->get_blog_key($k, $group);
+						}
+					} else {
+						$blogkeys[ $group ][] = $this->get_blog_key((is_bool($key)) ? '%' : $key, $group);
+					}
+				}
+			}
 
-		$blogkeys = [];
-		$this->prefetch_groups = $this->get_cache('prefetch_groups',self::GROUP_ID) ?: [];
-		foreach (array_keys($this->prefetch_groups) as $group) {
-			if (! $this->is_non_persistent_group($group) ) {
-				$blogkeys[ $group ] = [ $this->get_blog_key('%',$group) ];
+			if (!empty($blogkeys)) {
+				while ($this->select_each( $blogkeys, true )) {}
+				$this->addRuntimeStats("pre-fetched (+)",$this->select_count);
 			}
 		}
-
-		$group = ':prefetch';
-		$blogkeys[ "%{$group}" ] = [ $this->get_blog_key('%',$group) ];
-
-		if (!empty($blogkeys)) {
-			while ($this->select_each( $blogkeys )) {}
-			$this->addRuntimeStats("pre-fetched (+)",$this->select_count);
+		/* - results in potentially stale data and is antithetical to optimize_memory.
+		else if ($this->optimize_memory)
+		{
+			// 'notoptions' option is requested thousands of times, preload to L1 cache
+			foreach (['options','site-options'] as $group) {
+				$value 		= $this->get_cache('notoptions',$group) ?: [];
+				$blogkey 	= $this->get_blog_key('notoptions',$group);
+				$this->L1_cache[ $group ][ $blogkey ] = [ 'value' => $value, 'expire' => 0 ];
+			}
 		}
+		*/
 	}
 
 
@@ -2111,7 +2159,6 @@ class WP_Object_Cache
 		$this->blog_id = (int)$blog_id;
 		$this->load_prefetch_groups();
 		$this->load_cache_misses();
-	//	$this->wp_transients( 'import', $this->blog_id );
 	}
 
 
@@ -2165,7 +2212,7 @@ class WP_Object_Cache
 
 			if ($probability == 0)												// sampling
 			{
-				$this->set('sample', $this->getStats(true), self::GROUP_ID, 0);
+				$this->set('sample', $this->getCurrentStats(true), self::GROUP_ID, DAY_IN_SECONDS);
 			}
 		}
 
@@ -2373,7 +2420,7 @@ class WP_Object_Cache
 	public function delete_cache_file(): void
 	{
 		if ($this->use_db) {
-			$cacheName = trailingslashit($this->cache_dir) . $this->cache_file;
+			$cacheName = $this->cache_dir . $this->cache_file;
 			foreach ( [ '', '-journal', '-shm', '-wal' ] as $ext ) {
 				if (is_file($cacheName.$ext)) {
 					unlink($cacheName.$ext);
@@ -2508,37 +2555,108 @@ class WP_Object_Cache
 	}
 
 
+	/**
+	 * Adds a dashboard widget
+	 *
+	 * @return void
+	 */
+	public function showDashboardStats(): void
+	{
+		echo "\n<style>".esc_html($this->statsCSS)."</style>\n";
+		$this->htmlStats(false);
+	}
+
+
+	/**
+	 * Adds an admin notice
+	 *
+	 * @return void
+	 */
+	public function showAdminPageStats(): void
+	{
+		// this gets moved to the top of an admin page
+		echo "\n<style>".esc_html($this->statsCSS)."</style>\n";
+		echo "<div class='object-cache-notice notice notice-info'>";
+		echo "<details><summary>Object Cache Stats...</summary>";
+		$this->htmlStats();
+		echo "</details></div>\n";
+	}
+
+
+	/**
+	 * log runtime stats
+	 *
+	 * @return void
+	 */
+	public function logRuntimeStats(): void
+	{
+		$stats = $this->getStatsCache();
+
+		if (defined('QM_VERSION') && ( !defined('QM_DISABLED') || !QM_DISABLED ))
+		{
+			$log =  __CLASS__." on ".current_action()."\n";
+			foreach ($stats as $group => $cache) {
+				if ($cache && $cache[0]) {
+					$log .= "\t" . esc_attr( $group ) . ': ' . number_format( $cache[0], 0 );
+					if ($cache[1]) $log .=  ' ( '.esc_attr($cache[1]) . ' )';
+					$log .= "\n";
+				}
+			}
+			do_action( 'qm/info', $log );
+		}
+
+		if (defined('EACDOOJIGGER_VERSION'))
+		{
+			$log = 'cache hits: ' . number_format( $this->stats_runtime['cache hits'], 0).', ' .
+					'(L1: ' 		. number_format( $this->stats_runtime['L1 cache hits'], 0).', ';
+			if ($this->use_apcu) {
+				$log .=
+					'APCu: ' 		. number_format( $this->stats_runtime['L2 APCu hits'], 0).', ';
+			}
+			if ($this->use_db) {
+				$log .=
+					'L2: ' 		. number_format( $this->stats_runtime['L2 SQL hits'], 0);
+			}
+			$log = ltrim($log,', ').'), '.
+					 'misses: ' 	. number_format( $this->stats_runtime['cache misses'], 0).'}, ' .
+					 'ratio: ' 		. $stats['cache hits'][1];
+			do_action("eacDoojigger_log_notice",$log,__CLASS__);
+		}
+	}
+
 
 	/**
 	 * Echoes the stats of the caching (similar to WP default cache).
 	 * Called by outside actors (e.g. debug bar)
 	 *
-	 * Gives the cache hits, and cache misses. Also prints every cached group,
-	 * key and the data.
+	 * Gives the cache hits, and cache misses.
 	 *
-	 * @param bool $full include APCu & db
+	 * @param bool $full include groups, APCu & db
 	 */
 	public function stats(bool $full=false): void
 	{
-		$stats = $this->getStats($full);
+		$stats = $this->getCurrentStats($full);
 
-		echo "<p>";
-		echo "<strong>Cache Hits:</strong> ".number_format($this->stats_runtime['cache hits'],0)."<br />";
-		echo "<strong>Cache Misses:</strong> ".number_format($this->stats_runtime['cache misses'])."<br />";
-		echo "<strong>Cache Ratio:</strong> ".
-			esc_attr( $this->cache_hit_ratio($this->stats_runtime['cache hits'],$this->stats_runtime['cache misses']) );
-		echo "</p>\n";
+		if ($full && isset($stats['id'])) {
+			echo "<p>";
+			foreach ($stats['id'] as $name => $value) {
+				echo $value."<br />";
+			}
+			echo "</p>";
+		}
 
-		echo "<p><strong>Cache Counts:</strong></p><ul>";
+		echo "<p><strong>Object Cache Counts:</strong></p><ul>";
 		foreach ($stats['cache'] as $group => $cache) {
 			if ($cache && $cache[0]) {
-				echo '<li>' . esc_attr( $group ) .
-					 ' - ' . number_format( $cache[0], 0 );
+				echo '<li>' . ucwords(esc_attr( $group )) . ': ' . number_format( $cache[0], 0 );
+				if ($cache[1]) echo ' ( '.esc_attr($cache[1]) . ' )';
+
 			}
 		}
 		echo "</ul>\n";
 
-		if ($full && isset($stats['cache-groups'])) {
+		if ($full && isset($stats['cache-groups']))
+		{
 			echo "<p><strong>Cache Groups:</strong></p><ul>";
 			foreach ($stats['cache-groups'] as $group => $cache) {
 				if ($cache && $cache[1]) {
@@ -2550,7 +2668,8 @@ class WP_Object_Cache
 			echo "</ul>\n";
 		}
 
-		if ($full && isset($stats['apcu-groups'])) {
+		if ($full && isset($stats['apcu-groups']))
+		{
 			echo "<p><strong>APCu Lifetime:</strong></p><ul>";
 			foreach ($stats['apcu-groups'] as $group => $cache) {
 				if ($cache && $cache[1]) {
@@ -2561,7 +2680,8 @@ class WP_Object_Cache
 			}
 		}
 
-		if ($full && isset($stats['database-groups'])) {
+		if ($full && isset($stats['database-groups']))
+		{
 			echo "<p><strong>SQLite DB:</strong></p><ul>";
 			foreach ($stats['database-groups'] as $group => $cache) {
 				if ($cache && $cache[1]) {
@@ -2571,50 +2691,55 @@ class WP_Object_Cache
 				}
 			}
 		}
-
-		echo "<p>* ".esc_attr(self::PLUGIN_NAME)." v".esc_attr(EAC_OBJECT_CACHE_VERSION)."</p>\n";
 	}
 
 
 	/**
 	 * Echos the stats of the caching, formatted table.
 	 *
-	 * Gives the cache hits, and cache misses. Also prints every cached group,
-	 * key and the data.
+	 * Gives the cache hits, and cache misses.
 	 *
-	 * @param bool $full include APCu & db
-	 * @param bool $useSample use last sampling
+	 * @param bool $full include groups, APCu & db
 	 */
-	public function htmlStats(bool $full=false, bool $useSample = false): void
+	public function htmlStats(bool $full=true): void
 	{
-		$stats = ($useSample) ? $this->getLastSample() : $this->getStats($full);
+		$stats = $this->getLastSample();
 
 		echo "\n<div class='wp-object-cache'>";
 
 		if (isset($stats['id'])) {
 			echo "<p>";
 			foreach ($stats['id'] as $name => $value) {
-				echo esc_attr($name).": ".esc_attr($value)."<br />";
+				echo $value."<br />";
 			}
 			echo "</p>";
 		}
 
 		echo "\n<table class='wp-object-cache'>";
 
-		if (isset($stats['cache'])) {
-			echo "\n<tr><th colspan='4'><p>Cache Counts:</p></th></tr>";
+		if (isset($stats['cache']))
+		{
+			if ($full) {
+				echo "\n<tr><th colspan='4'><p>Cache Counts:</p></th></tr>";
+				$stats['cache'] = array_filter($stats['cache'], function($value,$name) {
+					return ($value && $value[0]);
+				}, ARRAY_FILTER_USE_BOTH);
+			} else {
+				$stats['cache'] = array_filter($stats['cache'], function($value,$name) {
+					return (str_ends_with($name,'hits') || str_ends_with($name,'misses'));
+				}, ARRAY_FILTER_USE_BOTH);
+			}
 			foreach ($stats['cache'] as $name => $value) {
-				if ($value && $value[0]) {
-					echo '<tr><th>'.esc_attr( $name ).'</th>'.
-							 '<td>'.number_format($value[0], 0).'</td>'.
-							 '<td>'.esc_attr($value[1]).'</td>'.
-							 '<td></td></tr>';
-				}
+				echo '<tr><th>'.esc_attr( $name ).'</th>'.
+						 '<td>'.number_format($value[0], 0).'</td>'.
+						 '<td>'.esc_attr($value[1]).'</td>'.
+						 '<td></td></tr>';
 			}
 		}
 
-		if ($full && isset($stats['cache-groups'])) {
-			echo "\n<tr><th colspan='4'><p>L1 (Memory Cache):</p></th></tr>";
+		if ($full && isset($stats['cache-groups']))
+		{
+			echo "\n<tr><th colspan='4'><p>Cache Groups:</p></th></tr>";
 			foreach ($stats['cache-groups'] as $name => $value) {
 				if ($value && $value[0]) {
 					echo '<tr><th>'.esc_attr( $name ).'</th>'.
@@ -2629,26 +2754,26 @@ class WP_Object_Cache
 			}
 		}
 
-		if ($full && isset($stats['apcu-groups'])) {
-			echo "\n<tr><th colspan='4'><p>L2 (APCu Cache):</p></th></tr>";
+		if ($full && isset($stats['apcu-groups']))
+		{
+			echo "\n<tr><th colspan='4'><p>APCu Cache:</p></th></tr>";
 			foreach ($stats['apcu-groups'] as $name => $value) {
 				if ($value && $value[0]) {
 					echo '<tr><th>'.esc_attr( $name ).'</th>'.
-					//	 '<td> +'.number_format( $value[0], 0) . '</td>'.
-						 '<td>-</td>'.
+						 '<td> +'.number_format( $value[0], 0) . '</td>'.
 						 '<td>'  .number_format( $value[1], 0) . '</td>'.
 						 '<td> ~'.number_format( $value[2] / KB_IN_BYTES, 2  ) . 'k</td></tr>';
 				}
 			}
 		}
 
-		if ($full && isset($stats['database-groups'])) {
-			echo "\n<tr><th colspan='4'><p>L2 (SQLite Cache):</p></th></tr>";
+		if ($full && isset($stats['database-groups']))
+		{
+			echo "\n<tr><th colspan='4'><p>SQLite Cache:</p></th></tr>";
 			foreach ($stats['database-groups'] as $name => $value) {
 				if ($value && $value[1]) {
 					echo '<tr><th>'.esc_attr( $name ).'</th>'.
-					//	 '<td> +'.number_format( $value[0], 0) . '</td>'.
-						 '<td>-</td>'.
+						 '<td> +'.number_format( $value[0], 0) . '</td>'.
 						 '<td>'  .number_format( $value[1], 0) . '</td>';
 					echo ($value[2])
 						? '<td> ~'.number_format( $value[2] / KB_IN_BYTES, 2 ) . 'k</td></tr>'
@@ -2670,28 +2795,36 @@ class WP_Object_Cache
 	 * @param bool $full include APCu & db
 	 * @return array
 	 */
-	public function getStats(bool $full=false): array
+	public function getCurrentStats(bool $full=false): array
 	{
 		$this->write_cache();
 
-		$stats = array();
-		$stats['id'] = array(
-			self::PLUGIN_NAME	=> EAC_OBJECT_CACHE_VERSION,
-			'cache file'		=> ($this->use_db)
-					? '~/'.trailingslashit(basename($this->cache_dir)) . $this->cache_file
-					: 'memory-only',
-			'peak memory used'	=> round((memory_get_peak_usage(false) / MB_IN_BYTES),1).'M of '.ini_get('memory_limit'),
-		);
+		$stats = array( 'id'=>[] );
+
+		$stats['id']['plugin'] 			= "<a href='https://eacdoojigger.earthasylum.com/eacobjectcache/' target='_blank'>" .
+							self::PLUGIN_NAME . "</a> v" . esc_attr(EAC_OBJECT_CACHE_VERSION);
+		//	'memory' 	=> 'peak memory used: ' . round((memory_get_peak_usage(false) / MB_IN_BYTES),1).'M of '.ini_get('memory_limit'),
+
+		if ($this->use_db) {
+			$cacheName	= $this->cache_dir . $this->cache_file;
+			$stats['id']['SQLite'] 		= "SQLite v" . \SQLite3::version()['versionString'] .
+							" using " . number_format( filesize($cacheName) / MB_IN_BYTES, 1 ) . "MB";
+		}
 
 		if ($this->use_apcu) {
 			$apcu = apcu_cache_info(true);
-			$stats['id']['APCu memory used'] = round(($apcu['mem_size'] / MB_IN_BYTES),1).'M of '.ini_get('apc.shm_size');
+			$stats['id']['APCu'] 		= "APCu v" . phpversion('apcu') . " using " .
+							round(($apcu['mem_size'] / MB_IN_BYTES),1).'MB of '.ini_get('apc.shm_size') . "B";
 		}
 
+		//$stats['id']['file'] 			= "cache file: " . ((bool)$this->use_db
+		//					? '~/'.trailingslashit(basename($this->cache_dir)) . $this->cache_file
+		//					: 'memory-only');
+
 		if (isset($_SERVER['REQUEST_URI'])) {
-			$stats['id']['sample uri']	= sanitize_url( $_SERVER['REQUEST_URI'] );
+			$stats['id']['sample_uri']	= 'sample uri: '.sanitize_url( $_SERVER['REQUEST_URI'] );
 		}
-		$stats['id']['sample time']		= wp_date('c');
+		$stats['id']['sample_time']		= 'sample time: '.wp_date('c');
 
 		// addRuntimeStats() counters
 		$stats['cache'] 				= $this->getStatsCache();
@@ -2699,16 +2832,16 @@ class WP_Object_Cache
 		if ($full)
 		{
 			// current cache contents by group
-			$stats['cache-groups'] 			= $this->getStatsGroups();
+			$stats['cache-groups'] 		= $this->getStatsGroups();
 
 			// APCu contents
 			if ($this->use_apcu) {
-				$stats['apcu-groups'] 		= $this->getStatsAPCu();
+				$stats['apcu-groups'] 	= $this->getStatsAPCu();
 			}
 
-			// database contents - all groups
+			// database contents
 			if ($this->use_db) {
-				$stats['database-groups'] 	= $this->getStatsDB();
+				$stats['database-groups'] = $this->getStatsDB();
 			}
 		}
 
@@ -2719,10 +2852,9 @@ class WP_Object_Cache
 	/**
 	 * Returns the current cache stats.
 	 *
-	 * @param bool $log add Query Monitor/eacDoojigger logging
 	 * @return array
 	 */
-	public function getStatsCache($log=false): array
+	public function getStatsCache(): array
 	{
 		$stats = array();
 
@@ -2741,35 +2873,6 @@ class WP_Object_Cache
 			$this->cache_hit_ratio($this->stats_runtime['L2 APCu hits'],$this->stats_runtime['L2 APCu misses']);
 		$stats['L2 SQL hits'][1] =
 			$this->cache_hit_ratio($this->stats_runtime['L2 SQL hits'],$this->stats_runtime['L2 SQL misses']);
-
-		if ($log)
-		{
-			if (defined('QM_VERSION') && ( !defined('QM_DISABLED') || !QM_DISABLED )) {
-				$qmlog =  __CLASS__." on ".current_action()."\n";
-				foreach ($stats as $group => $cache) {
-					if ($cache && $cache[0]) {
-						$qmlog .= "\t" . esc_attr( $group ) . ': ' . number_format( $cache[0], 0 ) . "\n";
-					}
-				}
-				do_action( 'qm/info', $qmlog );
-			}
-			if (defined('EACDOOJIGGER_VERSION')) {
-				$qmlog = 'cache hits: ' . number_format( $this->stats_runtime['cache hits'], 0).', ' .
-						 '(L1: ' 		. number_format( $this->stats_runtime['L1 cache hits'], 0).', ';
-				if ($this->use_apcu) {
-					$qmlog .=
-						'APCu: ' 		. number_format( $this->stats_runtime['L2 APCu hits'], 0).', ';
-				}
-				if ($this->use_db) {
-					$qmlog .=
-						 'L2: ' 		. number_format( $this->stats_runtime['L2 SQL hits'], 0);
-				}
-				$qmlog = ltrim($qmlog,', ').'), '.
-						 'misses: ' 	. number_format( $this->stats_runtime['cache misses'], 0).'}, ' .
-						 'ratio: ' 		. $stats['cache hits'][1];
-				do_action("eacDoojigger_log_notice",$qmlog,__CLASS__);
-			}
-		}
 
 		return $stats;
 	}
@@ -2825,7 +2928,7 @@ class WP_Object_Cache
 			$keys = new APCUIterator('/^'.$apcu_key.'/');
 			return ['Total' =>
 				[
-					$keys->getTotalHits(),
+					$this->stats_runtime['L2 APCu hits'],
 					$keys->getTotalCount(),
 					$keys->getTotalSize(),
 				]
@@ -2842,7 +2945,7 @@ class WP_Object_Cache
 	 */
 	public function getStatsDB(): array
 	{
-		$stats = array( 'Total' => [0,0,0,0] );
+		$stats = array( 'Total' => [$this->stats_runtime['L2 SQL hits'],0,0,0] );
 
 		if (!$this->use_db) return $stats;
 
@@ -2872,7 +2975,7 @@ class WP_Object_Cache
 		//	/* size */ 	array_sum(array_column($stats,1)),
 		//				filesize($cacheName),
 		//	];
-			$cacheName	= trailingslashit($this->cache_dir) . $this->cache_file;
+			$cacheName	= $this->cache_dir . $this->cache_file;
 			$stats['Total'][3] = filesize($cacheName);
 		}
 
@@ -2901,10 +3004,12 @@ class WP_Object_Cache
 	 */
 	public function getLastSample(): array
 	{
-		if ( $row = $this->get_cache( "sample", self::GROUP_ID ) ) {
-			return $row;
+		if ($this->display_stats) {
+			if ( $row = $this->get_cache( "sample", self::GROUP_ID ) ) {
+				return $row;
+			}
 		}
-		return $this->getStats(true);
+		return $this->getCurrentStats(true);
 	}
 
 

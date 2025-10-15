@@ -1,8 +1,8 @@
 === {eac}ObjectCache - a persistent object cache using SQLite & APCu to cache WordPress objects. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         2.0.0
-Last Updated:       30-Sep-2025
+Stable tag:         2.1.0
+Last Updated:       14-Oct-2025
 Requires at least:  5.8
 Tested up to:       6.8
 Requires PHP:       8.1
@@ -14,7 +14,7 @@ Tags:               object cache, wp cache, APCu, sqlite, persistent object cach
 WordPress URI:      https://wordpress.org/plugins/eacobjectcache
 GitHub URI:         https://github.com/EarthAsylum/eacObjectCache
 
-{eac}ObjectCache is a persistent object cache using APCu & SQLite to cache WordPress objects; A drop-in replacement to the WP_Object_Cache used by WordPress.
+{eac}ObjectCache is a persistent object cache using APCu & SQLite to cache WordPress objects; A drop-in replacement to the WP Object Cache used by WordPress.
 
 == Description ==
 
@@ -52,10 +52,10 @@ SQLite is a fast, small, single-file relational database engine. By using SQLite
     +   Cache/flush/switch by blog id.
 +   Caching statistics:
     +   Cache hits (typically above 90%).
-    +   Overall and L1/APCu/L2 hits, misses, & ratio.
-    +   L1 hits by object groups.
+    +   Overall and L1/L2 hits, misses, & ratio.
+    +   Cache hits by object groups.
     +   Number of APCu and SQLite keys stored.
-    +   L2 select/update/delete/commit counts.
+    +   SQLite select/update/delete/commit counts.
 +   Supports an enhanced superset of WP Object Cache functions.
 +   Easily enabled or disabled from {eac}Doojigger administrator page.
     +   Imports existing MySQL transients.
@@ -64,76 +64,98 @@ SQLite is a fast, small, single-file relational database engine. By using SQLite
 +   Optionally schedule periodic cache invalidation and rebuild.
 +   Uses the PHP Data Objects (PDO) extension included with PHP.
 
-_While {eac}ObjectCache does support multiple installations on a single server it does not support multiple servers per installation. SQLite and APCu work only on a single server, not in a clustered or load-balanced environment._
+_While {eac}ObjectCache does support multiple WordPress installations on a single server it does not support multiple servers per installation. SQLite and APCu work only on a single server, not in a clustered or load-balanced environment._
 
 = Configuration Alternatives =
 
 Assuming you have SQLite and APCu installed, what are your best options?
 
-1.	Fastest Caching
+1.	Fastest Caching - _Uses in-process memory and APCu shared memory._
 
-	+	Disable SQLite. [^1]
+	+	Disable SQLite. \*
 		+	`define( 'EAC_OBJECT_CACHE_USE_DB', false );`
-	+	_Uses in-process memory and APCu shared memory._
 	+ 	Advantage
 		+	Fast memory-only access.
+		+	Handles concurrent updates through APCu cache.
 	+ 	Disadvantage
 		+ 	APCu may invalidate data under memory constraint.
+		+	APCu cache is not shared with CLI.
 		+	APCu cache is lost on system or PHP restart.
 
-2.	Less memory (almost as fast)
+2.	Less memory (almost as fast) - _Uses in-process memory and APCu shared memory._
 
-	+	Disable SQLite. [^1]
+	+	Disable SQLite. \*
 		+	`define( 'EAC_OBJECT_CACHE_USE_DB', false );`
-	+	Optimize memory use. [^1]
+	+	Optimize memory use. \*
 		+	`define( 'EAC_OBJECT_CACHE_OPTIMIZE_MEMORY', true );`
-	+	_Uses in-process memory and APCu shared memory._
 	+ 	Advantage
 		+	Fast memory-only access.
+		+	Handles concurrent updates through APCu cache.
 		+	Conserves per-request memory by not pushing APCu hits to in-process memory.
 	+ 	Disadvantage
 		+	Slightly slower to access APCu memory over in-process memory.
 		+ 	APCu may invalidate data under memory constraint.
+		+	APCu cache is not shared with CLI.
 		+	APCu cache is lost on system or PHP restart.
 
-3.	Most resilient (and still fast)
+3.	Most resilient (and still fast) - _Uses in-process memory, APCu shared memory, and SQLite database._
 
 	+	Do nothing, this is the default.
-	+	_Uses in-process memory, APCu shared memory, and SQLite database._
 	+ 	Advantage
 		+	Most cache hits will come from in-process and APCu memory.
 		+	SQLite retains cache data after restart.
 	+ 	Disadvantage
 		+ 	Must keep SQLite database (on disk) updated.
+		+	Potential concurrency issues on high-volume site.
 
-4.	Resilient, efficient, and fast (recommended)
+4.	Resilient, efficient, and fast (recommended) - _Uses in-process memory, APCu shared memory, and SQLite database._
 
-	+	Optimize memory use. [^1]
+	+	Optimize memory use. \*
 		+	`define( 'EAC_OBJECT_CACHE_OPTIMIZE_MEMORY', true );`
-	+	_Uses in-process memory, APCu shared memory, and SQLite database._
 	+ 	Advantage
 		+	Most cache hits will come from in-process and APCu memory.
+		+	Handles concurrent updates better through APCu cache.
 		+	Conserves per-request memory by not pushing APCu hits to in-process memory.
 		+	SQLite retains cache data after restart.
 	+ 	Disadvantage
 		+	Slightly slower to access APCu memory over in-process memory.
 		+ 	Must keep SQLite database (on disk) updated.
 
-5.	Least efficient (default when APCu is not installed)
+5.	Least efficient (default when APCu is not installed) - _Uses in-process memory and SQLite database._
 
-	+	Disable APCu. [^1]
+	+	Disable APCu. \*
 		+	`define( 'EAC_OBJECT_CACHE_USE_APCU', false );`
-	+	_Uses in-process memory and SQLite database._
 	+ 	Advantage
 		+	Saves resources by not taking up APCu reserves.
+		+	More secure by not using shared memory.
 		+	SQLite retains cache data after restart.
 	+ 	Disadvantage
-		+	All cached data read from disk.
+		+	All cached data initially read from disk.
 		+ 	Must keep SQLite database (on disk) updated.
+		+	Potential concurrency issues on high-volume site.
 
-[^1]: These options may be set from the {eac}Doojigger administration screen.
+6.	For high-volume sites - _reduces or eliminates potential race conditions_
+	+	Optimize memory use. \*
+		+	`define( 'EAC_OBJECT_CACHE_OPTIMIZE_MEMORY', true );`
+	+	Disable delayed writes. \*
+		+	`define( 'EAC_OBJECT_CACHE_DELAYED_WRITES', false );`
+	+	Disable use of `alloptions` array.
+		+	`define( 'EAC_OBJECT_CACHE_DISABLE_ALLOPTIONS', true );`
+	+ 	Advantage
+		+	Most cache hits will come from in-process and APCu memory.
+		+	Conserves per-request memory by not pushing APCu hits to in-process memory.
+		+	Updates SQLite data immediately.
+		+	Conserves per-request memory by elimination large `alloptions` array(s).
+	+ 	Disadvantage
+		+	Slightly slower to access APCu memory over in-process memory.
+		+	Multiple single-row SQLite update transactions.
+		+	Slightly slower to access individual options from cache rather than `alloptions` array.
+
+\* These options may be set from the {eac}Doojigger administration screen.
 
 _When using SQLite, `delayed writes` (see below) dramatically improves efficiency by only writing updates at the end of the script process._
+
+_When using APCu shared memory, data is accessable by other PHP processes that may run on the server._
 
 = Inside The Numbers =
 
@@ -161,7 +183,18 @@ _When using SQLite, `delayed writes` (see below) dramatically improves efficienc
 | L2 SQL deletes	| The number of SQLite records deleted. |
 | L2 SQL commits    | The number of SQLite transactions executed to update and delete records. |
 
-* When a request results in a *L2 SQL miss*, the key is added to the L1 memory or L2 APCu cache as a miss so that additional requests for the same key do not result in additional SQL selects. This is known as a *negative hit* and still counted as a *cache miss*.
+* When a request results in a *L2 SQL miss*, the key is added to the L1 memory or L2 APCu cache as a miss so that additional requests for the same key do not result in additional SQL selects. This is known as a *negative hit* and still counted as a *cache miss* making the _cache hit ratio_ (93.10%) understated.
+
+Object cache statistics may be found:
+
++	In the *WP Object Cache* dashboard panel.
+	+	Uses `$wp_object_cache->showDashboardStats()`
++ 	In the *Debug Bar > Object Cache* panel.
+	+	Uses `$wp_object_cache->stats()`
++	In the *Query Monitor > Logs > Info* panel.
+	+	Uses `$wp_object_cache->getCurrentStats()`
++	In a *wp_admin_notice* block when *display_stats* is set for sampling.
+	+	Uses `$wp_object_cache->htmlStats()`
 
 == Settings ==
 
@@ -195,7 +228,20 @@ APCu memory caching is used, by default, only if the [APCu PECL extension](https
     define( 'EAC_OBJECT_CACHE_OPTIMIZE_MEMORY', true );
 ```
 
-When using APCu memory caching, optimize internal memory by not storing APCu data in the L1 memory cache. This may slightly increase processing time as cache hits will come through APCu but will reduce the per-process memory usage. This may also be advantageous on high volume systems where a single object may be updated by simultaneous processes.
+When using APCu memory caching, optimize internal memory by not storing APCu data in the L1 memory cache. This may slightly (negligibly) increase processing time as cache hits will come through APCu but will reduce the per-process memory usage. This may also be advantageous on high-volume sites where a single object may be updated by simultaneous processes.
+
+* * *
+
++   To disable use of the `alloptions` array in WordPress       (default: false):
+
+```
+    define( 'EAC_OBJECT_CACHE_DISABLE_ALLOPTIONS', true );
+```
+
+By default, WordPress pre-fetches many of the option values from the wp-options table on startup. This facilitates faster access to oft-used options. However, this also creates 1) a potential race condition on high-volume sites, and 2) a sometimes very large array of data in memory that may also be duplicated in the L1 and L2 caches. Disabling this forces WordPress to get individual options from the cache rather than from the array, eliminates the race condition, eliminates the large array(s), and reduces much of the logic used to maintain the array(s). This may be particularly advantageous when using APCu since the option values should already be in shared memory.
+
+\* _Once enabled, the caches should be cleared to eliminate previously cached `alloptions` arrays._
+\* _Uses filters `pre_wp_load_alloptions` (introduced in WP 6.2.0) and `wp_autoload_values_to_autoload` (introduced in WP 6.6.0)._
 
 * * *
 
@@ -380,6 +426,7 @@ When setting a default expiration (`EAC_OBJECT_CACHE_DEFAULT_EXPIRE`) for object
 
 ```
     define( 'EAC_OBJECT_CACHE_PREFETCH_GROUPS', [ 'groupA', 'groupB', ... ] );
+    define( 'EAC_OBJECT_CACHE_PREFETCH_GROUPS', [ 'groupA'=>['keyA','keyB'], 'groupB'=>'key%', ... ] );
 ```
 
 Pre-fetching a group of records may be much faster than loading each key individually, but may load keys that are not needed, using memory unnecessarily. Pre-fetching is disabled if APCu caching is being used.
@@ -429,10 +476,16 @@ Pre-fetching a group of records may be much faster than loading each key individ
 +   Outputs an html table of current stats. Use `$wp_object_cache->statsCSS` to style.
 
 ```
-    $wp_object_cache->htmlStats( $full=false );
+    $wp_object_cache->htmlStats();
 ```
 
-+   Outputs an html table of current stats similar to that generated by the default WordPress object cache.
++   Outputs an html table of current stats as seen on the admin dashboard. Use `$wp_object_cache->statsCSS` to style.
+
+```
+    $wp_object_cache->showDashboardStats();
+```
+
++   Outputs an html list of current stats.
 
 ```
     $wp_object_cache->stats( $full=false );
@@ -441,7 +494,7 @@ Pre-fetching a group of records may be much faster than loading each key individ
 +   Returns an array of current stats.
 
 ```
-    $cacheStats = $wp_object_cache->getStats( $full=false );
+    $cacheStats = $wp_object_cache->getCurrentStats( $full=false );
 ```
 
 +   Returns an array of stats from the last sample saved (or current).
@@ -574,6 +627,17 @@ wp_cache_add_group_expire( $groups )
 = Examples =
 
 ```php
+	/*
+	 * set runtime options
+	 */
+	if (defined('EAC_OBJECT_CACHE_VERSION'))
+	{
+		global $wp_object_cache;
+		$wp_object_cache->display_stats = 1;
+		$wp_object_cache->log_stats = true;
+		$wp_object_cache->log_errors = true;
+	}
+
     /*
      * add custom groups to global (not blog-specific)
      */
@@ -620,12 +684,12 @@ wp_cache_add_group_expire( $groups )
      */
     if (wp_cache_supports( 'group_expire' )) {
         wp_cache_add_group_expire( [
-            'comment-queries'		=> WEEK_IN_SECONDS,
-            'site-queries'			=> WEEK_IN_SECONDS,
-            'network-queries'		=> WEEK_IN_SECONDS,
-            'post-queries'			=> WEEK_IN_SECONDS,
-            'term-queries'			=> WEEK_IN_SECONDS,
-            'user-queries'			=> WEEK_IN_SECONDS,
+            'comment-queries'		=> DAY_IN_SECONDS,
+            'site-queries'			=> DAY_IN_SECONDS,
+            'network-queries'		=> DAY_IN_SECONDS,
+            'post-queries'			=> DAY_IN_SECONDS,
+            'term-queries'			=> DAY_IN_SECONDS,
+            'user-queries'			=> DAY_IN_SECONDS,
         ] );
     }
 ```
@@ -701,6 +765,22 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 2.1.0 – October 14, 2025 =
+
++	Added `EAC_OBJECT_CACHE_DISABLE_ALLOPTIONS` constant to disable use of WP `alloptions` array.
+	+	More efficient with APCu, reduces memory and storage use.
+	+	Requires WP 6.6.0+.
++	Prefetch `alloptions` and `notoptions` when not using APCu.
+	+	Requests for `alloptions` and `notoptions` may be more than 70% of cache hits.
++	Support keys in pre-fetch groups (group=>key) with SQL wildcard;
++	Proper implementation of the `$force` option in `wp_cache_get()`.
++	Fixed pre-fetch loader.
++	Added dashboard widget - `showDashboardStats()`.
++	Use full cache pathname (not just directory) to get APCu prefix id.
++	Expire last sample after 1 day.
++	Rework stats array/output, including htmlStats labels.
++	Disabled `write_hooks` when using APCu (unnecessary).
 
 = Version 2.0.0 – September 30, 2025 =
 
