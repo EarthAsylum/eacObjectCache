@@ -1,8 +1,8 @@
 === {eac}ObjectCache - a persistent object cache using SQLite & APCu to cache WordPress objects. ===
 Plugin URI:         https://eacdoojigger.earthasylum.com/eacobjectcache/
 Author:             [EarthAsylum Consulting](https://www.earthasylum.com)
-Stable tag:         2.1.0
-Last Updated:       14-Oct-2025
+Stable tag:         2.1.1
+Last Updated:       17-Oct-2025
 Requires at least:  5.8
 Tested up to:       6.8
 Requires PHP:       8.1
@@ -765,6 +765,11 @@ You should receive a copy of the GNU General Public License along with this prog
 
 
 == Changelog ==
+
+= Version 2.1.1 – October 17, 2025 =
+
++	FIX: proper return of empty/falsy APCu value.
++	Filter out unused APCu/SQL stats on dashboard widget.
 
 = Version 2.1.0 – October 14, 2025 =
 

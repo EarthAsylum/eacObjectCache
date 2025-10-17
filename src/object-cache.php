@@ -4,7 +4,7 @@
  *
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite and APCu powered WP_Object_Cache Drop-in
- * Version:				2.1.0
+ * Version:				2.1.1
  * Requires at least:	5.8
  * Tested up to:		6.8
  * Requires PHP:		7.4
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE_VERSION','2.1.0');
+define('EAC_OBJECT_CACHE_VERSION','2.1.1');
 
 /**
  * Derived from WordPress core WP_Object_Cache (wp-includes/class-wp-object-cache.php)
@@ -1037,6 +1037,23 @@ class WP_Object_Cache
 
 
 	/**
+	 * Get from APCu cache
+	 *
+	 * @param string	$group Where to group the cache contents. Default 'default'.
+	 * @param string	$blogkey blog id or blog|key (see get_blog_key)
+	 * @return mixed|bool fetch result or false
+	 */
+	private function apcu_fetch( $group, $blogkey )
+	{
+		$success = false;
+		if ($apcu_key = $this->get_apcu_key($group, $blogkey)) {
+			$data = \apcu_fetch($apcu_key,$success);
+		}
+		return ($success) ? $data : false;
+	}
+
+
+	/**
 	 * Determine whether a key exists in the cache, memory or database.
 	 *
 	 * @param string	$blogkey Cache key to check for existence. (blog|key)
@@ -1123,7 +1140,7 @@ class WP_Object_Cache
 	{
 		if ( ! $this->use_apcu ) return false;
 
-		if (($apcu_key = $this->get_apcu_key($group, $blogkey)) && ($data = apcu_fetch($apcu_key)))
+		if ($data = $this->apcu_fetch($group, $blogkey))
 		{
 			$this->current = (is_array($data)) ? $data : false;
 			if (! $this->optimize_memory) {
@@ -1400,7 +1417,8 @@ class WP_Object_Cache
 			}
 		}
 
-		if ($result = $this->get_cache($key, $group, true)) {
+		$result = $this->get_cache($key, $group, true);
+		if ($result !== false) {
 			$found = true;
 			return $result;
 		}
@@ -1437,9 +1455,12 @@ class WP_Object_Cache
 	{
 		if ( ! $blogkey = $this->get_blog_key( $key, $group ) ) return false;
 
-		return ($this->key_exists( $blogkey, $group, $count ))
-			? $this->current[ 'value' ] ?? false
-			: (bool)$this->addRuntimeStats('cache misses',(int)$count);
+		if ($this->key_exists( $blogkey, $group, $count )) {
+			return $this->current[ 'value' ] ?? false;
+		} else {
+			$this->addRuntimeStats('cache misses',(int)$count);
+			return false;
+		}
 	}
 
 
@@ -1656,7 +1677,7 @@ class WP_Object_Cache
 
 		$value = max( 0, ( (int) $this->get( $key, $group ) + (int) $offset ) );
 
-		$expire = $this->current[ 'expire' ] ?: 0;
+		$expire = $this->current[ 'expire' ] ?? 0;
 
 		$this->set( $key, $value, $group, $expire );
 		return $value;
@@ -2326,8 +2347,8 @@ class WP_Object_Cache
 			foreach ($updates as $blogkey => $expire) {
 				if ($expire !== false) {
 					$data = $this->L1_cache[ $group ][ $blogkey ][ 'value' ] ?? null;
-					if (is_null($data) && ($apcu_key = $this->get_apcu_key($group, $blogkey))) {
-						if ($data = apcu_fetch($apcu_key)) $data = $data[ 'value' ] ?? null;
+					if (is_null($data)) {
+						if ($data = $this->apcu_fetch($group, $blogkey)) $data = $data[ 'value' ] ?? null;
 					}
 					if (is_null($data)) {
 						$this->error_log(__METHOD__,"SQL write no data for key ".$group.'|'.$blogkey);
@@ -2728,6 +2749,16 @@ class WP_Object_Cache
 				$stats['cache'] = array_filter($stats['cache'], function($value,$name) {
 					return (str_ends_with($name,'hits') || str_ends_with($name,'misses'));
 				}, ARRAY_FILTER_USE_BOTH);
+				if (! $this->use_apcu) {
+					$stats['cache'] = array_filter($stats['cache'], function($value,$name) {
+						return (! str_starts_with($name,'L2 APCu'));
+					}, ARRAY_FILTER_USE_BOTH);
+				}
+				if (! $this->use_db) {
+					$stats['cache'] = array_filter($stats['cache'], function($value,$name) {
+						return (! str_starts_with($name,'L2 SQL'));
+					}, ARRAY_FILTER_USE_BOTH);
+				}
 			}
 			foreach ($stats['cache'] as $name => $value) {
 				echo '<tr><th>'.esc_attr( $name ).'</th>'.
