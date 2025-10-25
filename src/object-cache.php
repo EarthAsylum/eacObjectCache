@@ -4,7 +4,7 @@
  *
  * Plugin Name:			{eac}ObjectCache
  * Description:			{eac}Doojigger Object Cache - SQLite and APCu powered WP_Object_Cache Drop-in
- * Version:				2.1.1
+ * Version:				2.1.2
  * Requires at least:	5.8
  * Tested up to:		6.8
  * Requires PHP:		7.4
@@ -15,7 +15,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define('EAC_OBJECT_CACHE_VERSION','2.1.1');
+define('EAC_OBJECT_CACHE_VERSION','2.1.2');
 
 /**
  * Derived from WordPress core WP_Object_Cache (wp-includes/class-wp-object-cache.php)
@@ -554,8 +554,8 @@ class WP_Object_Cache
 		$this->cache_dir = trailingslashit($this->cache_dir);
 
 		// actions or filters that trigger an immediate cache write.
-		if (!$this->use_apcu) 	// unnecessary when using APCu
-		{
+		//if (!$this->use_apcu) 	// unnecessary when using APCu
+		//{
 			$noDelay = function($return=null) {
 				$this->set_delayed_writes( false );
 				return $return;
@@ -563,7 +563,7 @@ class WP_Object_Cache
 			foreach ($this->write_hooks as $hook) {
 				add_filter( $hook, fn()=>$noDelay() );
 			}
-		}
+		//}
 
 		if ($this->disable_alloptions)
 		{
